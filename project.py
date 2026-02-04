@@ -10,24 +10,26 @@ def checkout_func():
 
     repo_cs_url = "git@github.com"
     repo_https_url = "https://api.github.com/repos/"
-    branch = "cs-main"
 
     _ = repo_https_url
-    _ = csRunCommand
     _ = csGetPrecompiledLib
 
     csGetRepository(
-        repo_cs_url,
-        "cscosine/csCMake.git",
-        "csCMake",
-        branch,
+        base_url=repo_cs_url,
+        repo="qt/qt5.git",
+        repo_dir="qt6",
+        tag="v6.10.2",
         needCMakeUserPathFile=False,
+        generateDependentRepoAction=False,
+        useActionsOrgAccessToken=False,
     )
 
-    _ = csGetRepository
-    _ = csRunCommand
+    csRunCommand(
+        name="Init Qt Submodules",
+        command="./init-repository-linux.sh",
+        os_name="linux",
+    )
     _ = csGetPrecompiledLib
-    pass
 
 
 def build_func():

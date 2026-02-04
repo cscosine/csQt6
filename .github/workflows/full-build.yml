@@ -157,14 +157,13 @@ jobs:
           fetch-depth: 1
           token: ${{ secrets.ACTIONS_ORG_ACCESS }}
 
-      - name: checkout csCMake
+      - name: checkout qt6
         uses: actions/checkout@v4
         with:
-          repository: cscosine/csCMake.git
-          path: csCMake
-          ref: cs-main
+          repository: qt/qt5.git
+          path: qt6
+          ref: v6.10.2
           fetch-depth: 1
-          token: ${{ secrets.ACTIONS_ORG_ACCESS }}
 
       # ---------------------------------------------------
       # Compute current SHAs
@@ -174,7 +173,7 @@ jobs:
           echo "csQt6=$(git rev-parse HEAD)" >> shas.txt
           # all other deps...
           echo "cscosine/csProjectManager.git=$(git -C csProjectManager rev-parse HEAD)" >> shas.txt
-          echo "cscosine/csCMake.git=$(git -C csCMake rev-parse HEAD)" >> shas.txt
+          echo "qt/qt5.git=$(git -C qt6 rev-parse HEAD)" >> shas.txt
 
           cat shas.txt
 
