@@ -48,6 +48,12 @@ for pkg in "${packages[@]}"; do
 done
 
 if [ ${#missing[@]} -ne 0 ]; then
+  # clean apt cache to avoid issues with outdated package lists
+  sudo rm -f /etc/apt/apt-mirrors.txt
+  sudo apt clean
+  sudo rm -rf /var/lib/apt/lists/*
+  sudo apt update
+
   echo "Need to install missing packages: ${missing[*]}"
   sudo apt install -y "${missing[@]}"
 else
