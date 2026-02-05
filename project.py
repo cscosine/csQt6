@@ -24,11 +24,19 @@ def checkout_func():
         useActionsOrgAccessToken=False,
     )
 
+    # take a look to https://wiki.qt.io/Building_Qt_6_from_Git
+
     csRunCommand(
-        name="Init Qt Submodules",
+        name="Init Qt Submodules (linux)",
         command="./init-repository-linux.sh",
         os_name="linux",
     )
+    csRunCommand(
+        name="Init Qt Submodules (windows)",
+        command="cmd /c init-repository-windows.bat",
+        os_name="windows",
+    )
+
     _ = csGetPrecompiledLib
 
 
@@ -38,29 +46,13 @@ def build_func():
     # for interface only libraries, generate a single configuration only (use release)
     # note, use the {} to enable properly the -po option (preset only)
     presetRelease = {
-        "linux": ["linux-ninja{release}", "linux-ninja-multi-config-clang"],
-        "windows": ["msvc2022-x64", "msvc2022-x64-LLVM"],
-    }
-
-    # use {debug|release}
-    presetDebugRelease = {
-        "linux": ["linux-ninja{debug|release}", "linux-ninja-multi-config-clang"],
-        "windows": ["msvc2022-x64", "msvc2022-x64-LLVM"],
-    }
-
-    # use {debug|release|relWithDebInfo|paranoid}
-    presetsAll = {
-        "linux": [
-            "linux-ninja{debug|release|relWithDebInfo|paranoid}",
-            "linux-ninja-multi-config-clang",
-        ],
-        "windows": ["msvc2022-x64", "msvc2022-x64-LLVM"],
+        "linux": ["linux-ninja{release}"],
+        "windows": ["msvc2022-x64"],
     }
 
     _ = presetRelease
-    _ = presetDebugRelease
-    _ = presetsAll
 
+    # csWorkflow(repo_dir="qt6", os_presets_dict=presetRelease)
     _ = csWorkflow
 
 
