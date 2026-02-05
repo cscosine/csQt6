@@ -243,14 +243,254 @@ jobs:
             echo "💤 Build skipped (early-exit)"
           fi
 
+  build-linux-gcc:
+    needs: guard
+    if: needs.guard.outputs.should_build == 'true'
+
+    runs-on: ubuntu-latest
+    steps:
+
+    ##### UNCOMMENT AND MOVE THESE LINES IF YOU NEED A TERMINAL TO INTERACT AND INSPECT THE JOB
+    # - name: Start tmate session
+    #   uses: mxschmitt/action-tmate@v3
+
+
+    # checkout myself
+    - name: checkout
+      uses: actions/checkout@v4
+
+    # ---------------------------------------------------
+    # checkout and commands
+    - name: checkout csProjectManager
+      uses: actions/checkout@v4
+      with:
+        repository: cscosine/csProjectManager.git
+        path: csProjectManager
+        ref: cs-main
+        token: ${{ secrets.ACTIONS_ORG_ACCESS }}
+
+    - name: checkout qt6
+      uses: actions/checkout@v4
+      with:
+        repository: qt/qt5.git
+        path: qt6
+        ref: v6.10.2
+
+    - name: Init Qt Submodules (linux)
+      run: ./init-repository-linux.sh on linux
+
+    # ---------------------------------------------------
+
+    # ---------------------------------------------------
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+
+    - name: Install Python dependencies
+      run: pip install -r csProjectManager/requirements.txt
+
+    - name: Run all pre-commit hooks
+      run: python3 project.py --install-hooks --run-hooks
+      working-directory: .
+    # ---------------------------------------------------
+
+
+    # ---------------------------------------------------
+    # build section
+    - name: Build linux-gcc-qt6 (1 / 1)
+      run: ../build-repository-linux.sh &> ../qt6-linux-gcc-1-build_output.log
+      working-directory: qt6
+
+    - name: Upload build log
+      uses: actions/upload-artifact@v4
+      with:
+        name: qt6-linux-gcc-1-build_output.log
+        path: qt6-linux-gcc-1-build_output.log
+
+    - name: Show last lines on failure
+      if: failure()
+      run: tail -n 200 qt6-linux-gcc-1-build_output.log
+      working-directory: .
+
+    # ---------------------------------------------------
+
+    # ---------------------------------------------------
+    # zip installation section
+    - name: Zip Installations linux-gcc
+      run: |
+        if [ "${GITHUB_REF_TYPE}" = "tag" ]; then
+          VERSION=${GITHUB_REF_NAME}
+        else
+          VERSION=$(date +'%Y%m%d-%H%M%S')
+        fi
+
+        echo "VERSION=$VERSION" >> $GITHUB_ENV
+        echo "Using VERSION=$VERSION"
+
+        (
+          cd install/gcc/
+          zip -r "$GITHUB_WORKSPACE/bundle-csQt6-${VERSION}-qt6-linux-gcc.zip" qt6
+        )
+      shell: bash
+    # ---------------------------------------------------
+
+    # ---------------------------------------------------
+    # prepare artifacts section
+    - name: Upload Installation Artifacts linux-gcc
+      uses: actions/upload-artifact@v4
+      with:
+        name: linux-gcc
+        if-no-files-found: error
+        path: |
+          bundle-csQt6-${{ env.VERSION }}-qt6-linux-gcc.zip
+    # ---------------------------------------------------
+
+  build-windows-msvc2022-x64:
+    needs: guard
+    if: needs.guard.outputs.should_build == 'true'
+
+    runs-on: windows-latest
+    steps:
+
+
+    # checkout myself
+    - name: checkout
+      uses: actions/checkout@v4
+
+    # ---------------------------------------------------
+    # checkout and commands
+    - name: checkout csProjectManager
+      uses: actions/checkout@v4
+      with:
+        repository: cscosine/csProjectManager.git
+        path: csProjectManager
+        ref: cs-main
+        token: ${{ secrets.ACTIONS_ORG_ACCESS }}
+
+    - name: checkout qt6
+      uses: actions/checkout@v4
+      with:
+        repository: qt/qt5.git
+        path: qt6
+        ref: v6.10.2
+
+    - name: Init Qt Submodules (windows)
+      run: cmd /c init-repository-windows.bat on windows
+
+    # ---------------------------------------------------
+
+    # ---------------------------------------------------
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+
+    - name: Install Python dependencies
+      run: pip install -r csProjectManager/requirements.txt
+
+    - name: Run all pre-commit hooks
+      run: python3 project.py --install-hooks --run-hooks
+      working-directory: .
+    # ---------------------------------------------------
+
+    # ---------------------------------------------------
+    # additional setup for windows
+    - name: Setup MSVC environment
+      uses: ilammy/msvc-dev-cmd@v1
+      with:
+        arch: x64
+
+    # note: keep setup cmake after msvc setup to have the correct cmake in path
+    - name: Setup CMake
+      uses: lukka/get-cmake@latest
+
+    # ---------------------------------------------------
+
+    # ---------------------------------------------------
+    # build section
+    - name: Build windows-msvc2022-x64-qt6 (1 / 1)
+      run: cmd /c ..\build-repository-windows.bat *> ../qt6-windows-msvc2022-x64-1-build_output.log
+      working-directory: qt6
+
+    - name: Upload build log
+      uses: actions/upload-artifact@v4
+      with:
+        name: qt6-windows-msvc2022-x64-1-build_output.log
+        path: qt6-windows-msvc2022-x64-1-build_output.log
+
+    - name: Show last lines on failure
+      if: failure()
+      run: Get-Content qt6-windows-msvc2022-x64-1-build_output.log -Tail 200
+      working-directory: .
+    # ---------------------------------------------------
+
+    # ---------------------------------------------------
+    # zip installation section
+    - name: Zip Installations windows-msvc2022-x64
+      shell: pwsh
+      run: |
+        if ($env:GITHUB_REF_TYPE -eq "tag") {
+          $VERSION = $env:GITHUB_REF_NAME
+        } else {
+          $VERSION = Get-Date -Format "yyyyMMdd-HHmmss"
+        }
+
+        "VERSION=$VERSION" | Out-File -FilePath $env:GITHUB_ENV -Append
+        Write-Host "Using VERSION=$VERSION"
+
+        # zip qt6
+
+        $src = "$env:GITHUB_WORKSPACE\install\msvc2022-x64\qt6"
+        $dst = "$env:GITHUB_WORKSPACE\bundle-csQt6-$VERSION-qt6-windows-msvc2022-x64.zip"
+        Write-Host "*** src $src"
+        Write-Host "*** dst $dst"
+
+        if (Test-Path $dst) {
+            Remove-Item $dst
+        }
+
+
+        if (-not (Test-Path $src)) {
+          throw "Source path does not exist: $src"
+        }
+
+        Compress-Archive -Path $src -DestinationPath $dst
+
+    # ---------------------------------------------------
+
+
+    # ---------------------------------------------------
+    # prepare artifacts section
+    - name: Upload Installation Artifacts windows-msvc2022-x64
+      uses: actions/upload-artifact@v4
+      with:
+        name: windows-msvc2022-x64
+        if-no-files-found: error
+        path: |
+          bundle-csQt6-${{ env.VERSION }}-qt6-windows-msvc2022-x64.zip
+    # ---------------------------------------------------
+
 
   # ---------------------------------------------------
   # create release section
   create-release:
     runs-on: ubuntu-latest
-    needs: [  ]  # waits for all builds
+    needs: [ build-linux-gcc, build-windows-msvc2022-x64 ]  # waits for all builds
     if: ${{ github.ref_type == 'tag' }}   # only on tag
     steps:
+
+      - name: Download artifacts linux-gcc
+        uses: actions/download-artifact@v4
+        with:
+          name: linux-gcc
+          path: linux-gcc
+
+      - name: Download artifacts windows-msvc2022-x64
+        uses: actions/download-artifact@v4
+        with:
+          name: windows-msvc2022-x64
+          path: windows-msvc2022-x64
 
       - name: Create GitHub release and upload assets
         uses: softprops/action-gh-release@v1
@@ -259,6 +499,8 @@ jobs:
           name: Release ${{ github.ref_name }}
           fail_on_unmatched_files: true
           files: |
+            linux-gcc/*.zip
+            windows-msvc2022-x64/*.zip
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
   # ---------------------------------------------------

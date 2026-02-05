@@ -41,18 +41,18 @@ def checkout_func():
 
 
 def build_func():
-    from csProjectManager.projectManager import csWorkflow
+    from csProjectManager.projectManager import csWorkflow, csCustomBuild
 
     # for interface only libraries, generate a single configuration only (use release)
     # note, use the {} to enable properly the -po option (preset only)
-    presetRelease = {
-        "linux": ["linux-ninja{release}"],
-        "windows": ["msvc2022-x64"],
+    cutstomCommandRelease = {
+        # note: the commands are run in the repo directory
+        "linux": [("gcc", ["../build-repository-linux.sh"])],
+        "windows": [("msvc2022-x64", ["cmd /c ..\\build-repository-windows.bat"])],
     }
 
-    _ = presetRelease
+    csCustomBuild(repo_dir="qt6", os_presets_dict=cutstomCommandRelease)
 
-    # csWorkflow(repo_dir="qt6", os_presets_dict=presetRelease)
     _ = csWorkflow
 
 
