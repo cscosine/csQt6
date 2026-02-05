@@ -49,6 +49,10 @@ done
 
 if [ ${#missing[@]} -ne 0 ]; then
 
+  # TODO(sc) add to github actions only, clean mirrors
+  sudo sed -i 's|mirror+file:/etc/apt/apt-mirrors.txt|http://archive.ubuntu.com/ubuntu|g' /etc/apt/sources.list
+  sudo apt update
+
   echo "Need to install missing packages: ${missing[*]}"
   sudo apt install -y "${missing[@]}"
 else
