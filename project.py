@@ -14,6 +14,12 @@ def checkout_func():
     _ = repo_https_url
     _ = csGetPrecompiledLib
 
+    csRunCommand(
+        name="Install prerequisites for Linux",
+        command="./installRequirements-linux.sh",
+        os_name="linux",
+    )
+
     csGetRepository(
         base_url=repo_cs_url,
         repo="qt/qt5.git",

@@ -269,6 +269,9 @@ jobs:
         ref: cs-main
         token: ${{ secrets.ACTIONS_ORG_ACCESS }}
 
+    - name: Install prerequisites for Linux
+      run: ./installRequirements-linux.sh on linux
+
     - name: checkout qt6
       uses: actions/checkout@v4
       with:
