@@ -53,8 +53,10 @@ def build_func():
     # note, use the {} to enable properly the -po option (preset only)
     cutstomCommandRelease = {
         # note: the commands are run in the repo directory
-        "linux": [("gcc", ["../build-repository-linux.sh"])],
-        "windows": [("msvc2022-x64", ["cmd /c ..\\build-repository-windows.bat"])],
+        "linux": [("linux-gcc", ["../build-repository-linux.sh"])],
+        "windows": [
+            ("windows-msvc2022-x64", ["cmd /c ..\\build-repository-windows.bat"])
+        ],
     }
 
     csCustomBuild(repo_dir="qt6", os_presets_dict=cutstomCommandRelease)
