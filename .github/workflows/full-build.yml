@@ -334,7 +334,7 @@ jobs:
 
         (
           cd install/linux-gcc/
-          zip -r "$GITHUB_WORKSPACE/bundle-csQt6-${VERSION}-qt6-linux-linux-gcc.zip" qt6
+          tar -czf "$GITHUB_WORKSPACE/bundle-csQt6-${VERSION}-qt6-linux-linux-gcc.tar.gz" qt6
         )
       shell: bash
     # ---------------------------------------------------
@@ -347,7 +347,7 @@ jobs:
         name: linux-linux-gcc
         if-no-files-found: error
         path: |
-          bundle-csQt6-${{ env.VERSION }}-qt6-linux-linux-gcc.zip
+          bundle-csQt6-${{ env.VERSION }}-qt6-linux-linux-gcc.tar.gz
     # ---------------------------------------------------
 
   build-windows-windows-msvc2022-x64:
@@ -504,7 +504,7 @@ jobs:
           name: Release ${{ github.ref_name }}
           fail_on_unmatched_files: true
           files: |
-            linux-linux-gcc/*.zip
+            linux-linux-gcc/*.tar.gz
             windows-windows-msvc2022-x64/*.zip
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
