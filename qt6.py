@@ -7,7 +7,7 @@ from csorchestrator.core.report import Report
 from csorchestrator.orchestrator.orchestrator import Orchestrator, OptionalOrchestratorWithReport
 from csorchestrator.step.step_get_repository import RepoUrlParts, StepGetRepositoryGitHub, StepGetRepositoryExecuteOnlyOncePerMatrix,StepGetRepositoryExtraDepthOne,StepGetRepositoryExtraAccessToken
 from csorchestrator.step.step_cmake_command import StepCMakeWorkflow
-from csorchestrator.step.step_custom_command import StepCustomCommand, StepInstallAptPackages
+from csorchestrator.step.step_custom_command import StepBashScriptCommand, StepInstallAptPackages
 from csorchestrator.utils.presets.supported_variants import BuildConfig, get_supported_context_os_architecture_list
 from csorchestrator.core.optional_result_with_report import OptionalResultWithReport
 from csorchestrator.cli.cli import orchestrator_main_with_default_run
@@ -59,7 +59,7 @@ def create_orchestrator() -> OptionalOrchestratorWithReport:
         )
     )
 
-    flag_repo_update = False
+    flag_repo_update = True
 
     p = o.create_phase("Repo Update")
     if flag_repo_update:
@@ -117,10 +117,10 @@ def create_orchestrator() -> OptionalOrchestratorWithReport:
     )) # TODO use smt like StepGetRepositoryExecuteOnlyOncePerMatrix() --> generalize to smt generic? mabe based on (phase-step) as unique id for detecting single exec
 
     p = o.create_phase(f"Configure-Build-Test-Install")
-    p.add_step(StepCustomCommand(
+    p.add_step(StepBashScriptCommand(
         name = 'init repo',
         description = 'init repo',
-        cmd=["bash", "-c", "\n".join(['cd workspace/qt6','./init-repository'])]
+        cmd=['cd workspace/qt6','./init-repository']
     )) # TODO repo init need also single exec in matrix
 
     # TODO build
