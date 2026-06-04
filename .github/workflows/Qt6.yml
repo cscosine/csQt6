@@ -1,0 +1,224 @@
+name: Qt6
+
+on:
+  push:
+    branches:
+      - main
+      - dev
+    tags:
+      - 'v*.*.*'
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+  schedule:
+    - cron: '0 3 * * 1'
+
+jobs:
+  release-from-artifacts:
+    needs: orchestrator-matrix
+    runs-on: ubuntu-latest
+
+    if: ${{ github.ref_type == 'tag' }}
+
+    permissions:
+      contents: write
+
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v8
+        with:
+          path: artifacts
+
+      - name: Show downloaded files
+        run: find artifacts -type f
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v3
+        with:
+          files: |
+            artifacts/**/*    
+
+  orchestrator-matrix:
+    runs-on: ${{ matrix.runner }}
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: linux
+            os_version: ubuntu22.04
+            architecture: x64
+            architecture_variant: generic
+            compiler: gcc
+            compiler_version: default
+            generator: ninja
+            generator_type: singleconfig
+            runner: ubuntu-22.04
+          - os: linux
+            os_version: ubuntu22.04
+            architecture: x64
+            architecture_variant: generic
+            compiler: gcc
+            compiler_version: default
+            generator: ninjamulticonfig
+            generator_type: multiconfig
+            runner: ubuntu-22.04
+          - os: linux
+            os_version: ubuntu22.04
+            architecture: x64
+            architecture_variant: generic
+            compiler: clang
+            compiler_version: default
+            generator: ninja
+            generator_type: singleconfig
+            runner: ubuntu-22.04
+          - os: linux
+            os_version: ubuntu22.04
+            architecture: x64
+            architecture_variant: generic
+            compiler: clang
+            compiler_version: default
+            generator: ninjamulticonfig
+            generator_type: multiconfig
+            runner: ubuntu-22.04
+          - os: linux
+            os_version: ubuntu24.04
+            architecture: x64
+            architecture_variant: generic
+            compiler: gcc
+            compiler_version: default
+            generator: ninja
+            generator_type: singleconfig
+            runner: ubuntu-24.04
+          - os: linux
+            os_version: ubuntu24.04
+            architecture: x64
+            architecture_variant: generic
+            compiler: gcc
+            compiler_version: default
+            generator: ninjamulticonfig
+            generator_type: multiconfig
+            runner: ubuntu-24.04
+          - os: linux
+            os_version: ubuntu24.04
+            architecture: x64
+            architecture_variant: generic
+            compiler: clang
+            compiler_version: default
+            generator: ninja
+            generator_type: singleconfig
+            runner: ubuntu-24.04
+          - os: linux
+            os_version: ubuntu24.04
+            architecture: x64
+            architecture_variant: generic
+            compiler: clang
+            compiler_version: default
+            generator: ninjamulticonfig
+            generator_type: multiconfig
+            runner: ubuntu-24.04
+          - os: windows
+            os_version: v10
+            architecture: x64
+            architecture_variant: generic
+            compiler: msvc
+            compiler_version: default
+            generator: msvc2022
+            generator_type: multiconfig
+            runner: windows-2022
+          - os: windows
+            os_version: v10
+            architecture: x64
+            architecture_variant: generic
+            compiler: msvc
+            compiler_version: default
+            generator: msvc2026
+            generator_type: multiconfig
+            runner: windows-2025-vs2026
+          - os: windows
+            os_version: v10
+            architecture: x64
+            architecture_variant: generic
+            compiler: msvcclang
+            compiler_version: default
+            generator: msvc2022
+            generator_type: multiconfig
+            runner: windows-2022
+          - os: windows
+            os_version: v10
+            architecture: x64
+            architecture_variant: generic
+            compiler: msvcclang
+            compiler_version: default
+            generator: msvc2026
+            generator_type: multiconfig
+            runner: windows-2025-vs2026
+
+    steps:
+      - name: Run command install apt packages
+        shell: bash
+        run: |
+          bash
+          -c
+          set -euo pipefail # enable strict mode
+
+if [ -t 0 ]; then
+    # if running in interactive terminal, ask for password if needed
+    SUDO="sudo"
+else
+    # if running in a non-interactive terminal (e.g. in CI workflows), use sudo without 
+    #   password prompt (fail if password is needed)
+    SUDO="sudo -n"
+fi
+
+packages=(
+libfontconfig1-dev
+libfreetype-dev
+libgtk-3-dev
+libx11-dev
+libx11-xcb-dev
+libxcb-cursor-dev
+libxcb-glx0-dev
+libxcb-icccm4-dev
+libxcb-image0-dev
+libxcb-keysyms1-dev
+libxcb-randr0-dev
+libxcb-render-util0-dev
+libxcb-shape0-dev
+libxcb-shm0-dev
+libxcb-sync-dev
+libxcb-util-dev
+libxcb-xfixes0-dev
+libxcb-xkb-dev
+libxcb1-dev
+libxext-dev
+libxfixes-dev
+libxi-dev
+libxkbcommon-dev
+libxkbcommon-x11-dev
+)
+
+missing=()
+
+for pkg in "${packages[@]}"; do
+  dpkg -s "$pkg" &>/dev/null || missing+=("$pkg")
+done
+
+if [ ${#missing[@]} -ne 0 ]; then
+
+  sudo apt update
+
+  echo "Need to install missing packages: ${missing[*]}"
+  sudo apt install -y "${missing[@]}"
+else
+  echo "All packages already installed."
+fi
+
+      - name: Run command init repo
+        shell: bash
+        run: |
+          bash
+          -c
+          cd workspace/qt6
+./init-repository

@@ -1,0 +1,31 @@
+the generate wf for custom command produces messed up lines, due to the use of bash -c script, where script contains \n
+
+build, according with chatgpt, can use
+
+to obtain basically what i have with presets
+
+../qt6/configure \
+    -cmake-generator Ninja \
+    -prefix /opt/qt6 \
+    -- \
+    -DCMAKE_C_COMPILER=clang \
+    -DCMAKE_CXX_COMPILER=clang++
+
+than, as usual
+
+
+cmake --build . --parallel 4
+cmake --install .
+
+note: what with single generator (ninja)? which build type? should i iterate on debug/release config/build?
+
+so for single create subdir debug/release
+cmake  -DCMAKE_BUILD_TYPE=Release
+cmake --build
+cmake  -DCMAKE_BUILD_TYPE=Debug
+cmake --build
+
+while for multi
+cmake ../ 
+cmake --build . --config Release
+cmake --build . --config Debug
