@@ -4,8 +4,8 @@ from pathlib import Path
 from typing import Sequence, TypeAlias
 
 from csorchestrator.core.report import Report
-from csorchestrator.orchestrator.orchestrator import Orchestrator, OptionalOrchestratorWithReport
-from csorchestrator.step.step_get_repository import RepoUrlParts, StepGetRepositoryGitHub, StepGetRepositoryExecuteOnlyOncePerMatrix,StepGetRepositoryExtraDepthOne,StepGetRepositoryExtraAccessToken
+from csorchestrator.orchestrator.orchestrator import Orchestrator, OptionalOrchestratorWithReport, create_orchestrator_factory
+from csorchestrator.step.step_get_repository import RepoUrlParts, StepGetRepositoryGitHub, StepGetRepositoryExecuteOnlyOncePerMatrix,StepGetRepositoryExtraDepthOne
 from csorchestrator.step.step_cmake_command import StepCMakeWorkflow
 from csorchestrator.step.step_custom_command import StepBashScriptCommand, StepInstallAptPackages
 from csorchestrator.utils.presets.supported_variants import BuildConfig, get_supported_context_os_architecture_list
@@ -13,7 +13,6 @@ from csorchestrator.core.optional_result_with_report import OptionalResultWithRe
 from csorchestrator.cli.cli import orchestrator_main_with_default_run
 from csorchestrator.context.context_os_architecture_compiler_generator import (
     ExecutionMatrixOsArchCompilerGenerator,
-    MatrixSkipExecutionOnNonMatchingContext
 )
 from csorchestrator.ci.github.github_workflow_config import (
     CreateGitHubWorkflowConfig,
@@ -34,7 +33,8 @@ def create_orchestrator() -> OptionalOrchestratorWithReport:
     # please keep version aligned with qt version
     qt_version_tag = "v6.10.2"
 
-    o = Orchestrator ("Qt6", version=qt_version_tag).create_default_github_workflow(
+    o = create_orchestrator_factory("Qt6", version=qt_version_tag, execution_matrix_name = "orchestrator-matrix")
+    o.create_default_github_workflow(
             config=CreateGitHubWorkflowConfig(
             on_push_branches=["main", "dev"],
             on_push_tags=["'v*.*.*'"],
@@ -42,12 +42,8 @@ def create_orchestrator() -> OptionalOrchestratorWithReport:
             on_dispatch=True,
             on_schedule=Cron.weekly(DayOfWeek.MON, hour=3),
         )
-    ).set_execution_matrix(
-        ExecutionMatrixOsArchCompilerGenerator(
-            name="orchestrator-matrix",
-            os_architecture_compiler_generator_list = get_supported_context_os_architecture_list()
-        ).add_extra(MatrixSkipExecutionOnNonMatchingContext())
     )
+    o.set_execution_matrix_list(get_supported_context_os_architecture_list())
 
     o.default_github_wf.on_job(
         job=
