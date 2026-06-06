@@ -165,6 +165,7 @@ jobs:
           fetch-depth: 1
 
       - name: Run command install apt packages
+        if: ${{ matrix.os == 'linux' && startsWith(matrix.os_version, 'ubuntu') }}
         shell: bash
         run: |
           set -euo pipefail # enable strict mode
@@ -221,8 +222,47 @@ jobs:
             echo "All packages already installed."
           fi
 
-      - name: Run command init repo
+      - name: Run command init repo (Linux-Ubuntu)
+        if: ${{ matrix.os == 'linux' && startsWith(matrix.os_version, 'ubuntu') }}
         shell: bash
         run: |
           cd workspace/qt6
           ./init-repository
+
+      - name: Run command init repo (Windows)
+        if: ${{ matrix.os == 'windows' }}
+        shell: powershell
+        run: |
+          cd workspace/qt6
+          ./init-repository.bat
+
+      - name: Create Archives
+        env:
+          VERSIONS: ${{ steps.versions.outputs.packages }}
+        shell: python
+        run: |
+          import json
+          import os
+          import tarfile
+          from pathlib import Path
+          
+          versions = json.loads(os.environ['VERSIONS'])
+          
+          for entry in versions:
+              name = entry['name']
+              version = entry['version']
+              install_subdir = Path('workspace/install/csv1-${{ matrix.os }}-${{ matrix.os_version }}-${{ matrix.architecture }}-${{ matrix.architecture_variant }}-${{ matrix.compiler }}-${{ matrix.compiler_version }}-${{ matrix.generator }}').resolve()
+              input_path = Path(install_subdir / Path(name)).resolve()
+              output_path = Path(install_subdir / Path('csv1-${{ matrix.os }}-${{ matrix.os_version }}-${{ matrix.architecture }}-${{ matrix.architecture_variant }}-${{ matrix.compiler }}-${{ matrix.compiler_version }}-${{ matrix.generator }}' + '-' + name + '-' + version + '.tar.gz')).resolve()
+              
+              with tarfile.open(output_path, 'w:gz') as tar:
+                  for path in input_path.rglob('*'):
+                      resolved_path = path.resolve()
+                      arcname = path.resolve().relative_to(install_subdir)
+                      tar.add(resolved_path, arcname=arcname)
+
+      - name: Upload Artifacts
+        uses: actions/upload-artifact@v7
+        with:
+          name: Qt6-v6.10.2-csv1-${{ matrix.os }}-${{ matrix.os_version }}-${{ matrix.architecture }}-${{ matrix.architecture_variant }}-${{ matrix.compiler }}-${{ matrix.compiler_version }}-${{ matrix.generator }}
+          path: workspace/install/csv1-${{ matrix.os }}-${{ matrix.os_version }}-${{ matrix.architecture }}-${{ matrix.architecture_variant }}-${{ matrix.compiler }}-${{ matrix.compiler_version }}-${{ matrix.generator }}/*.tar.gz

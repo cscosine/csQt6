@@ -1,13 +1,16 @@
 #!/usr/bin/env python3
+import os
 import sys
 from pathlib import Path
 from typing import Sequence, TypeAlias
 
 from csorchestrator.core.report import Report
+from csorchestrator.context.context_os_architecture import OS, UBUNTU_STRING_PREFIX
+from csorchestrator.step.step_utils import StepExecuteOnlyOn
 from csorchestrator.orchestrator.orchestrator import Orchestrator, OptionalOrchestratorWithReport, create_orchestrator_factory_all_supported_cases
 from csorchestrator.step.step_get_repository import RepoUrlParts, StepGetRepositoryGitHub, StepGetRepositoryExtraDepthOne
-from csorchestrator.orchestrator.step_base import StepExecuteOnlyOncePerMatrix, StepSkipExecutionOnLocal
-from csorchestrator.step.step_custom_command import StepBashScriptCommand, StepInstallAptPackages
+from csorchestrator.step.step_utils import StepExecuteOnlyOn, StepExecuteOnlyOncePerMatrix, StepSkipExecutionOnLocal
+from csorchestrator.step.step_custom_command import StepBashScriptCommand,StepWinPSCommand, StepInstallAptPackages
 from csorchestrator.utils.presets.supported_variants import BuildConfig
 from csorchestrator.core.optional_result_with_report import OptionalResultWithReport
 from csorchestrator.cli.cli import orchestrator_main_with_default_run
@@ -80,7 +83,7 @@ def create_orchestrator() -> OptionalOrchestratorWithReport:
             )
         )
 
-    p = o.create_phase("Install Requirements")
+    p = o.create_phase("Install Requirements (Linux-Ubuntu)")
     p.add_step(StepInstallAptPackages(
         name = 'install apt packages',
         description = 'install apt packages if not already installed in the system',
@@ -113,16 +116,43 @@ def create_orchestrator() -> OptionalOrchestratorWithReport:
     ).add_extra(
                 StepExecuteOnlyOncePerMatrix()
             )
+            .add_extra(
+                StepExecuteOnlyOn(
+                    os = OS.LINUX,
+                    version_starts_with = UBUNTU_STRING_PREFIX
+                )
+            )
     ) 
 
-    p = o.create_phase(f"Configure-Build-Test-Install")
+    p = o.create_phase(f"Configure-Build-Test-Install (Linux-Ubuntu)")
     p.add_step(StepBashScriptCommand(
-        name = 'init repo',
+        name = 'init repo (Linux-Ubuntu)',
         description = 'init repo',
         cmd=['cd workspace/qt6','./init-repository']
     ).add_extra(
         StepExecuteOnlyOncePerMatrix()
-    )) 
+    )
+    .add_extra(
+    StepExecuteOnlyOn(
+        os = OS.LINUX,
+        version_starts_with = UBUNTU_STRING_PREFIX
+    )
+    )
+    ) 
+    p = o.create_phase(f"Configure-Build-Test-Install (Windows)")
+    p.add_step(StepWinPSCommand(
+        name = 'init repo (Windows)',
+        description = 'init repo',
+        cmd=['cd workspace/qt6','./init-repository.bat']
+    ).add_extra(
+        StepExecuteOnlyOncePerMatrix()
+    )
+    .add_extra(
+    StepExecuteOnlyOn(
+        os = OS.WINDOWS,
+    )
+    )
+    ) 
 
     # TODO build
     # old build command, as bck
@@ -136,23 +166,23 @@ def create_orchestrator() -> OptionalOrchestratorWithReport:
 
     p = o.create_phase(f"Create and Upload Artifacts")
 
-    # p.add_step(
-    #     StepCreateArchives(
-    #         name = "Create Archives",
-    #         description= "Create archives with libs and versions",
-    #         input_id = "versions",
-    #         input_dict = "packages",
-    #         base_install_dir = base_install_dir,
-    #     ).add_extra(StepSkipExecutionOnLocal())
-    # )
+    p.add_step(
+        StepCreateArchives(
+            name = "Create Archives",
+            description= "Create archives with libs and versions",
+            input_id = "versions",
+            input_dict = "packages",
+            base_install_dir = base_install_dir,
+        ).add_extra(StepSkipExecutionOnLocal())
+    )
 
-    # p.add_step(
-    #     StepUploadArtifacts(
-    #         name = "Upload Artifacts",
-    #         description= "Upload Artifacts with libs and versions",
-    #         base_install_dir = base_install_dir,
-    #     ).add_extra(StepSkipExecutionOnLocal())
-    # )
+    p.add_step(
+        StepUploadArtifacts(
+            name = "Upload Artifacts",
+            description= "Upload Artifacts with libs and versions",
+            base_install_dir = base_install_dir,
+        ).add_extra(StepSkipExecutionOnLocal())
+    )
 
     return OptionalResultWithReport.createResultAndReport(o, report)
 
