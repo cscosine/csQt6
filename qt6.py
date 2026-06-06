@@ -5,8 +5,8 @@ from typing import Sequence, TypeAlias
 
 from csorchestrator.core.report import Report
 from csorchestrator.orchestrator.orchestrator import Orchestrator, OptionalOrchestratorWithReport, create_orchestrator_factory_all_supported_cases
-from csorchestrator.step.step_get_repository import RepoUrlParts, StepGetRepositoryGitHub, StepGetRepositoryExecuteOnlyOncePerMatrix,StepGetRepositoryExtraDepthOne
-from csorchestrator.step.step_cmake_command import StepCMakeWorkflow
+from csorchestrator.step.step_get_repository import RepoUrlParts, StepGetRepositoryGitHub, StepGetRepositoryExtraDepthOne
+from csorchestrator.orchestrator.step_base import StepExecuteOnlyOncePerMatrix, StepSkipExecutionOnLocal
 from csorchestrator.step.step_custom_command import StepBashScriptCommand, StepInstallAptPackages
 from csorchestrator.utils.presets.supported_variants import BuildConfig
 from csorchestrator.core.optional_result_with_report import OptionalResultWithReport
@@ -34,6 +34,7 @@ def create_orchestrator() -> OptionalOrchestratorWithReport:
     qt_version_tag = "v6.10.2"
 
     o = create_orchestrator_factory_all_supported_cases("Qt6", version=qt_version_tag, execution_matrix_name = "orchestrator-matrix")
+    
     o.create_default_github_workflow(
             config=CreateGitHubWorkflowConfig(
             on_push_branches=["main", "dev"],
@@ -62,7 +63,7 @@ def create_orchestrator() -> OptionalOrchestratorWithReport:
             StepGetRepositoryGitHub(
                 name="qt6",
                 description=f"Clone or pull-ff qt6",
-                target_directory=str(base_target_dir / "qt6"),
+                target_directory=(base_target_dir / "qt6").as_posix(),
                 repo_url_parts= RepoUrlParts(
                     repo_base_url=StepGetRepositoryGitHub.GITHUB_BASE_URL_SSH,
                     repo_org="qt",
@@ -75,7 +76,7 @@ def create_orchestrator() -> OptionalOrchestratorWithReport:
                     on_github_action_checkout=True,
                 )
             ).add_extra(
-                StepGetRepositoryExecuteOnlyOncePerMatrix()
+                StepExecuteOnlyOncePerMatrix()
             )
         )
 
@@ -109,14 +110,19 @@ def create_orchestrator() -> OptionalOrchestratorWithReport:
           "libxkbcommon-dev",
           "libxkbcommon-x11-dev",
         ]
-    )) # TODO use smt like StepGetRepositoryExecuteOnlyOncePerMatrix() --> generalize to smt generic? mabe based on (phase-step) as unique id for detecting single exec
+    ).add_extra(
+                StepExecuteOnlyOncePerMatrix()
+            )
+    ) 
 
     p = o.create_phase(f"Configure-Build-Test-Install")
     p.add_step(StepBashScriptCommand(
         name = 'init repo',
         description = 'init repo',
         cmd=['cd workspace/qt6','./init-repository']
-    )) # TODO repo init need also single exec in matrix
+    ).add_extra(
+        StepExecuteOnlyOncePerMatrix()
+    )) 
 
     # TODO build
     # old build command, as bck
@@ -137,7 +143,7 @@ def create_orchestrator() -> OptionalOrchestratorWithReport:
     #         input_id = "versions",
     #         input_dict = "packages",
     #         base_install_dir = base_install_dir,
-    #     )
+    #     ).add_extra(StepSkipExecutionOnLocal())
     # )
 
     # p.add_step(
@@ -145,7 +151,7 @@ def create_orchestrator() -> OptionalOrchestratorWithReport:
     #         name = "Upload Artifacts",
     #         description= "Upload Artifacts with libs and versions",
     #         base_install_dir = base_install_dir,
-    #     )
+    #     ).add_extra(StepSkipExecutionOnLocal())
     # )
 
     return OptionalResultWithReport.createResultAndReport(o, report)

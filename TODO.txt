@@ -1,5 +1,3 @@
-the generate wf for custom command produces messed up lines, due to the use of bash -c script, where script contains \n
-
 build, according with chatgpt, can use
 
 to obtain basically what i have with presets
