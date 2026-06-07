@@ -51,72 +51,96 @@ jobs:
             architecture: x64
             architecture_variant: generic
             compiler: gcc
+            c_compiler: gcc
+            cpp_compiler: g++
             compiler_version: default
             generator: ninja
             generator_type: singleconfig
+            generator_cmake: Ninja
             runner: ubuntu-22.04
           - os: linux
             os_version: ubuntu22.04
             architecture: x64
             architecture_variant: generic
             compiler: gcc
+            c_compiler: gcc
+            cpp_compiler: g++
             compiler_version: default
             generator: ninjamulticonfig
             generator_type: multiconfig
+            generator_cmake: Ninja Multi-Config
             runner: ubuntu-22.04
           - os: linux
             os_version: ubuntu22.04
             architecture: x64
             architecture_variant: generic
             compiler: clang
+            c_compiler: clang
+            cpp_compiler: clang++
             compiler_version: default
             generator: ninja
             generator_type: singleconfig
+            generator_cmake: Ninja
             runner: ubuntu-22.04
           - os: linux
             os_version: ubuntu22.04
             architecture: x64
             architecture_variant: generic
             compiler: clang
+            c_compiler: clang
+            cpp_compiler: clang++
             compiler_version: default
             generator: ninjamulticonfig
             generator_type: multiconfig
+            generator_cmake: Ninja Multi-Config
             runner: ubuntu-22.04
           - os: linux
             os_version: ubuntu24.04
             architecture: x64
             architecture_variant: generic
             compiler: gcc
+            c_compiler: gcc
+            cpp_compiler: g++
             compiler_version: default
             generator: ninja
             generator_type: singleconfig
+            generator_cmake: Ninja
             runner: ubuntu-24.04
           - os: linux
             os_version: ubuntu24.04
             architecture: x64
             architecture_variant: generic
             compiler: gcc
+            c_compiler: gcc
+            cpp_compiler: g++
             compiler_version: default
             generator: ninjamulticonfig
             generator_type: multiconfig
+            generator_cmake: Ninja Multi-Config
             runner: ubuntu-24.04
           - os: linux
             os_version: ubuntu24.04
             architecture: x64
             architecture_variant: generic
             compiler: clang
+            c_compiler: clang
+            cpp_compiler: clang++
             compiler_version: default
             generator: ninja
             generator_type: singleconfig
+            generator_cmake: Ninja
             runner: ubuntu-24.04
           - os: linux
             os_version: ubuntu24.04
             architecture: x64
             architecture_variant: generic
             compiler: clang
+            c_compiler: clang
+            cpp_compiler: clang++
             compiler_version: default
             generator: ninjamulticonfig
             generator_type: multiconfig
+            generator_cmake: Ninja Multi-Config
             runner: ubuntu-24.04
           - os: windows
             os_version: v10
@@ -126,6 +150,7 @@ jobs:
             compiler_version: default
             generator: msvc2022
             generator_type: multiconfig
+            generator_cmake: Visual Studio 17 2022
             runner: windows-2022
           - os: windows
             os_version: v10
@@ -135,6 +160,7 @@ jobs:
             compiler_version: default
             generator: msvc2026
             generator_type: multiconfig
+            generator_cmake: Visual Studio 18 2026
             runner: windows-2025-vs2026
           - os: windows
             os_version: v10
@@ -144,6 +170,7 @@ jobs:
             compiler_version: default
             generator: msvc2022
             generator_type: multiconfig
+            generator_cmake: Visual Studio 17 2022
             runner: windows-2022
           - os: windows
             os_version: v10
@@ -153,6 +180,7 @@ jobs:
             compiler_version: default
             generator: msvc2026
             generator_type: multiconfig
+            generator_cmake: Visual Studio 18 2026
             runner: windows-2025-vs2026
 
     steps:
@@ -229,12 +257,129 @@ jobs:
           cd workspace/qt6
           ./init-repository
 
+      - name: Run command configure/build/install (Linux-Ubuntu)
+        if: ${{ matrix.os == 'linux' && startsWith(matrix.os_version, 'ubuntu') }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          
+          cd workspace/
+          
+          WORKSPACE_ROOT=$(pwd)
+          FOLDER_NAME="csv1-${{ matrix.os }}-${{ matrix.os_version }}-${{ matrix.architecture }}-${{ matrix.architecture_variant }}-${{ matrix.compiler }}-${{ matrix.compiler_version }}-${{ matrix.generator }}"
+          GENERATOR_TYPE="${{ matrix.generator_type }}"
+          GENERATOR_TYPE_SINGLECONFIG="singleconfig"
+          GENERATOR_TYPE_MULTICONFIG="multiconfig"
+          GENERATOR_CMAKE="${{ matrix.generator_cmake }}"
+          C_COMPILER="${{ matrix.c_compiler }}"
+          CPP_COMPILER="${{ matrix.cpp_compiler }}"
+          
+          : "${FOLDER_NAME:?missing FOLDER_NAME}"
+          : "${GENERATOR_TYPE:?missing GENERATOR_TYPE}"
+          : "${GENERATOR_TYPE_SINGLECONFIG:?missing GENERATOR_TYPE_SINGLECONFIG}"
+          : "${GENERATOR_TYPE_MULTICONFIG:?missing GENERATOR_TYPE_MULTICONFIG}"
+          : "${GENERATOR_CMAKE:?missing GENERATOR_CMAKE}"
+          
+          mkdir -p "install/${FOLDER_NAME}/qt6"
+          
+          if [[ "${GENERATOR_TYPE}" == "${GENERATOR_TYPE_SINGLECONFIG}" ]]; then
+              mkdir -p "build/${FOLDER_NAME}/qt6/debug"
+              cd "build/${FOLDER_NAME}/qt6/debug"
+              "${WORKSPACE_ROOT}/qt6/configure" -debug -cmake-generator "${GENERATOR_CMAKE}" ${C_COMPILER:+-DCMAKE_C_COMPILER="${C_COMPILER}"} ${CPP_COMPILER:+-DCMAKE_CXX_COMPILER="${CPP_COMPILER}"} -prefix "${WORKSPACE_ROOT}/install/${FOLDER_NAME}/qt6"
+              cmake --build . --parallel
+              cmake --install .
+          
+              cd "${WORKSPACE_ROOT}"
+          
+              mkdir -p "build/${FOLDER_NAME}/qt6/release"
+              cd "build/${FOLDER_NAME}/qt6/release"
+              "${WORKSPACE_ROOT}/qt6/configure" -release -cmake-generator "${GENERATOR_CMAKE}" ${C_COMPILER:+-DCMAKE_C_COMPILER="${C_COMPILER}"} ${CPP_COMPILER:+-DCMAKE_CXX_COMPILER="${CPP_COMPILER}"} -prefix "${WORKSPACE_ROOT}/install/${FOLDER_NAME}/qt6"
+              cmake --build . --parallel
+              cmake --install .
+          
+          elif [[ "${GENERATOR_TYPE}" == "${GENERATOR_TYPE_MULTICONFIG}" ]]; then
+              mkdir -p "build/${FOLDER_NAME}/qt6"
+              cd "build/${FOLDER_NAME}/qt6"
+              "${WORKSPACE_ROOT}/qt6/configure" -cmake-generator "${GENERATOR_CMAKE}" ${C_COMPILER:+-DCMAKE_C_COMPILER="${C_COMPILER}"} ${CPP_COMPILER:+-DCMAKE_CXX_COMPILER="${CPP_COMPILER}"} -prefix "${WORKSPACE_ROOT}/install/${FOLDER_NAME}/qt6"
+              cmake --build . --config Debug --parallel
+              cmake --build . --config Release --parallel
+              cmake --install . --config Debug
+              cmake --install . --config Release
+          
+          else
+              echo "Unknown generator_type: ${GENERATOR_TYPE}"
+              exit 1
+          fi
+
       - name: Run command init repo (Windows)
         if: ${{ matrix.os == 'windows' }}
         shell: powershell
         run: |
           cd workspace/qt6
           ./init-repository.bat
+
+      - name: Run command configure/build/install (Windows)
+        if: ${{ matrix.os == 'windows' }}
+        shell: powershell
+        run: |
+          Set-StrictMode -Version Latest
+          $ErrorActionPreference = 'Stop'
+          
+          cd workspace
+          
+          $WORKSPACE_ROOT = Get-Location
+          $FOLDER_NAME = "csv1-${{ matrix.os }}-${{ matrix.os_version }}-${{ matrix.architecture }}-${{ matrix.architecture_variant }}-${{ matrix.compiler }}-${{ matrix.compiler_version }}-${{ matrix.generator }}"
+          $GENERATOR_TYPE = "${{ matrix.generator_type }}"
+          $GENERATOR_TYPE_SINGLECONFIG = "singleconfig"
+          $GENERATOR_TYPE_MULTICONFIG = "multiconfig"
+          $GENERATOR_CMAKE = "${{ matrix.generator_cmake }}"
+          $C_COMPILER = "${{ matrix.c_compiler }}"
+          $CPP_COMPILER = "${{ matrix.cpp_compiler }}"
+          
+          New-Item -ItemType Directory -Force -Path "$WORKSPACE_ROOT/install/$FOLDER_NAME/qt6" | Out-Null
+          
+          $CMAKE_ARGS = @()
+          if ($C_COMPILER) { $CMAKE_ARGS += "-DCMAKE_C_COMPILER=$C_COMPILER" }
+          if ($CPP_COMPILER) { $CMAKE_ARGS += "-DCMAKE_CXX_COMPILER=$CPP_COMPILER" }
+          
+          if ($GENERATOR_TYPE -eq $GENERATOR_TYPE_SINGLECONFIG) {
+          
+              $DEBUG_DIR = "$WORKSPACE_ROOT/build/$FOLDER_NAME/qt6/debug"
+              New-Item -ItemType Directory -Force -Path $DEBUG_DIR | Out-Null
+              Set-Location $DEBUG_DIR
+          
+              & "$WORKSPACE_ROOT/qt6/configure.bat" -debug -cmake-generator $GENERATOR_CMAKE @CMAKE_ARGS -prefix "$WORKSPACE_ROOT/install/$FOLDER_NAME/qt6"
+              cmake --build . --parallel
+              cmake --install .
+          
+              $RELEASE_DIR = "$WORKSPACE_ROOT/build/$FOLDER_NAME/qt6/release"
+              New-Item -ItemType Directory -Force -Path $RELEASE_DIR | Out-Null
+              Set-Location $RELEASE_DIR
+          
+              & "$WORKSPACE_ROOT/qt6/configure.bat" -release -cmake-generator $GENERATOR_CMAKE @CMAKE_ARGS -prefix "$WORKSPACE_ROOT/install/$FOLDER_NAME/qt6"
+              cmake --build . --parallel
+              cmake --install .
+          
+          }
+          elseif ($GENERATOR_TYPE -eq $GENERATOR_TYPE_MULTICONFIG) {
+          
+              $BUILD_DIR = "$WORKSPACE_ROOT/build/$FOLDER_NAME/qt6"
+              New-Item -ItemType Directory -Force -Path $BUILD_DIR | Out-Null
+              Set-Location $BUILD_DIR
+          
+              & "$WORKSPACE_ROOT/qt6/configure.bat" -cmake-generator $GENERATOR_CMAKE @CMAKE_ARGS -prefix "$WORKSPACE_ROOT/install/$FOLDER_NAME/qt6"
+          
+              cmake --build . --config Debug --parallel
+              cmake --build . --config Release --parallel
+          
+              cmake --install . --config Debug
+              cmake --install . --config Release
+          
+          }
+          else {
+              Write-Host "Unknown generator_type: $GENERATOR_TYPE"
+              exit 1
+          }
 
       - name: Create Archives
         env:

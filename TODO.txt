@@ -27,3 +27,7 @@ while for multi
 cmake ../ 
 cmake --build . --config Release
 cmake --build . --config Debug
+
+LINKS
+https://doc.qt.io/qt-6/build-sources.html
+https://gist.github.com/gianmaria/c3aa8696f28136f92e736cdfbaf5fa25
