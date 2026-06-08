@@ -286,7 +286,7 @@ jobs:
               mkdir -p "build/${FOLDER_NAME}/qt6/debug"
               cd "build/${FOLDER_NAME}/qt6/debug"
               "${WORKSPACE_ROOT}/qt6/configure" -debug -cmake-generator "${GENERATOR_CMAKE}" ${C_COMPILER:+-DCMAKE_C_COMPILER="${C_COMPILER}"} ${CPP_COMPILER:+-DCMAKE_CXX_COMPILER="${CPP_COMPILER}"} -prefix "${WORKSPACE_ROOT}/install/${FOLDER_NAME}/qt6"
-              cmake --build . --parallel
+              cmake --build . --parallel 4
               cmake --install .
           
               cd "${WORKSPACE_ROOT}"
@@ -294,15 +294,15 @@ jobs:
               mkdir -p "build/${FOLDER_NAME}/qt6/release"
               cd "build/${FOLDER_NAME}/qt6/release"
               "${WORKSPACE_ROOT}/qt6/configure" -release -cmake-generator "${GENERATOR_CMAKE}" ${C_COMPILER:+-DCMAKE_C_COMPILER="${C_COMPILER}"} ${CPP_COMPILER:+-DCMAKE_CXX_COMPILER="${CPP_COMPILER}"} -prefix "${WORKSPACE_ROOT}/install/${FOLDER_NAME}/qt6"
-              cmake --build . --parallel
+              cmake --build . --parallel 4
               cmake --install .
           
           elif [[ "${GENERATOR_TYPE}" == "${GENERATOR_TYPE_MULTICONFIG}" ]]; then
               mkdir -p "build/${FOLDER_NAME}/qt6"
               cd "build/${FOLDER_NAME}/qt6"
               "${WORKSPACE_ROOT}/qt6/configure" -cmake-generator "${GENERATOR_CMAKE}" ${C_COMPILER:+-DCMAKE_C_COMPILER="${C_COMPILER}"} ${CPP_COMPILER:+-DCMAKE_CXX_COMPILER="${CPP_COMPILER}"} -prefix "${WORKSPACE_ROOT}/install/${FOLDER_NAME}/qt6"
-              cmake --build . --config Debug --parallel
-              cmake --build . --config Release --parallel
+              cmake --build . --config Debug --parallel 4
+              cmake --build . --config Release --parallel 4
               cmake --install . --config Debug
               cmake --install . --config Release
           
@@ -349,7 +349,7 @@ jobs:
               Set-Location $DEBUG_DIR
           
               & "$WORKSPACE_ROOT/qt6/configure.bat" -debug -cmake-generator $GENERATOR_CMAKE @CMAKE_ARGS -prefix "$WORKSPACE_ROOT/install/$FOLDER_NAME/qt6"
-              cmake --build . --parallel
+              cmake --build . --parallel 4
               cmake --install .
           
               $RELEASE_DIR = "$WORKSPACE_ROOT/build/$FOLDER_NAME/qt6/release"
@@ -357,7 +357,7 @@ jobs:
               Set-Location $RELEASE_DIR
           
               & "$WORKSPACE_ROOT/qt6/configure.bat" -release -cmake-generator $GENERATOR_CMAKE @CMAKE_ARGS -prefix "$WORKSPACE_ROOT/install/$FOLDER_NAME/qt6"
-              cmake --build . --parallel
+              cmake --build . --parallel 4
               cmake --install .
           
           }
@@ -369,8 +369,8 @@ jobs:
           
               & "$WORKSPACE_ROOT/qt6/configure.bat" -cmake-generator $GENERATOR_CMAKE @CMAKE_ARGS -prefix "$WORKSPACE_ROOT/install/$FOLDER_NAME/qt6"
           
-              cmake --build . --config Debug --parallel
-              cmake --build . --config Release --parallel
+              cmake --build . --config Debug --parallel 4
+              cmake --build . --config Release --parallel 4
           
               cmake --install . --config Debug
               cmake --install . --config Release

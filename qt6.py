@@ -188,7 +188,7 @@ def create_orchestrator() -> OptionalOrchestratorWithReport:
                 '    mkdir -p "build/${FOLDER_NAME}/qt6/debug"',
                 '    cd "build/${FOLDER_NAME}/qt6/debug"',
                 '    "${WORKSPACE_ROOT}/qt6/configure" -debug -cmake-generator "${GENERATOR_CMAKE}" ${C_COMPILER:+-DCMAKE_C_COMPILER="${C_COMPILER}"} ${CPP_COMPILER:+-DCMAKE_CXX_COMPILER="${CPP_COMPILER}"} -prefix "${WORKSPACE_ROOT}/install/${FOLDER_NAME}/qt6"',
-                "    cmake --build . --parallel",
+                "    cmake --build . --parallel 4",
                 "    cmake --install .",
                 "",
                 '    cd "${WORKSPACE_ROOT}"',
@@ -196,15 +196,15 @@ def create_orchestrator() -> OptionalOrchestratorWithReport:
                 '    mkdir -p "build/${FOLDER_NAME}/qt6/release"',
                 '    cd "build/${FOLDER_NAME}/qt6/release"',
                 '    "${WORKSPACE_ROOT}/qt6/configure" -release -cmake-generator "${GENERATOR_CMAKE}" ${C_COMPILER:+-DCMAKE_C_COMPILER="${C_COMPILER}"} ${CPP_COMPILER:+-DCMAKE_CXX_COMPILER="${CPP_COMPILER}"} -prefix "${WORKSPACE_ROOT}/install/${FOLDER_NAME}/qt6"',
-                "    cmake --build . --parallel",
+                "    cmake --build . --parallel 4",
                 "    cmake --install .",
                 "",
                 'elif [[ "${GENERATOR_TYPE}" == "${GENERATOR_TYPE_MULTICONFIG}" ]]; then',
                 '    mkdir -p "build/${FOLDER_NAME}/qt6"',
                 '    cd "build/${FOLDER_NAME}/qt6"',
                 '    "${WORKSPACE_ROOT}/qt6/configure" -cmake-generator "${GENERATOR_CMAKE}" ${C_COMPILER:+-DCMAKE_C_COMPILER="${C_COMPILER}"} ${CPP_COMPILER:+-DCMAKE_CXX_COMPILER="${CPP_COMPILER}"} -prefix "${WORKSPACE_ROOT}/install/${FOLDER_NAME}/qt6"',
-                "    cmake --build . --config Debug --parallel",
-                "    cmake --build . --config Release --parallel",
+                "    cmake --build . --config Debug --parallel 4",
+                "    cmake --build . --config Release --parallel 4",
                 "    cmake --install . --config Debug",
                 "    cmake --install . --config Release",
                 "",
@@ -267,7 +267,7 @@ def create_orchestrator() -> OptionalOrchestratorWithReport:
                 "    Set-Location $DEBUG_DIR",
                 "",
                 '    & "$WORKSPACE_ROOT/qt6/configure.bat" -debug -cmake-generator $GENERATOR_CMAKE @CMAKE_ARGS -prefix "$WORKSPACE_ROOT/install/$FOLDER_NAME/qt6"',
-                "    cmake --build . --parallel",
+                "    cmake --build . --parallel 4",
                 "    cmake --install .",
                 "",
                 '    $RELEASE_DIR = "$WORKSPACE_ROOT/build/$FOLDER_NAME/qt6/release"',
@@ -275,7 +275,7 @@ def create_orchestrator() -> OptionalOrchestratorWithReport:
                 "    Set-Location $RELEASE_DIR",
                 "",
                 '    & "$WORKSPACE_ROOT/qt6/configure.bat" -release -cmake-generator $GENERATOR_CMAKE @CMAKE_ARGS -prefix "$WORKSPACE_ROOT/install/$FOLDER_NAME/qt6"',
-                "    cmake --build . --parallel",
+                "    cmake --build . --parallel 4",
                 "    cmake --install .",
                 "",
                 "}",
@@ -287,8 +287,8 @@ def create_orchestrator() -> OptionalOrchestratorWithReport:
                 "",
                 '    & "$WORKSPACE_ROOT/qt6/configure.bat" -cmake-generator $GENERATOR_CMAKE @CMAKE_ARGS -prefix "$WORKSPACE_ROOT/install/$FOLDER_NAME/qt6"',
                 "",
-                "    cmake --build . --config Debug --parallel",
-                "    cmake --build . --config Release --parallel",
+                "    cmake --build . --config Debug --parallel 4",
+                "    cmake --build . --config Release --parallel 4",
                 "",
                 "    cmake --install . --config Debug",
                 "    cmake --install . --config Release",
@@ -306,16 +306,6 @@ def create_orchestrator() -> OptionalOrchestratorWithReport:
             )
         )
     )
-
-    # TODO build
-    # old build command, as bck
-    ## mkdir -p ../build/linux-gcc/qt6/
-    ## mkdir -p ../install/linux-gcc/qt6/
-
-    ## cd ../build/linux-gcc/qt6/
-    ## ../../../qt6/configure -prefix ../../../install/linux-gcc/qt6/
-    ## cmake --build . --parallel 4
-    ## cmake --install .
 
     p = o.create_phase(f"Create and Upload Artifacts")
 
