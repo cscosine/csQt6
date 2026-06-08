@@ -54,7 +54,7 @@ def create_orchestrator() -> OptionalOrchestratorWithReport:
     base_install_dir = base_target_dir / Path("install")
 
     # please keep version aligned with qt version
-    qt_version_tag = "v6.10.2"
+    qt_version_tag = "v6.11.1"
 
     o = create_orchestrator_factory_all_supported_cases(
         "Qt6", version=qt_version_tag, execution_matrix_name="orchestrator-matrix"
