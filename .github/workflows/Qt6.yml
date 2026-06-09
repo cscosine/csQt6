@@ -147,40 +147,84 @@ jobs:
             architecture: x64
             architecture_variant: generic
             compiler: msvc
-            compiler_version: default
-            generator: msvc2022
-            generator_type: multiconfig
-            generator_cmake: Visual Studio 17 2022
+            compiler_version: msvc_2022_17
+            generator: ninja
+            generator_type: singleconfig
+            generator_cmake: Ninja
             runner: windows-2022
           - os: windows
             os_version: v10
             architecture: x64
             architecture_variant: generic
             compiler: msvc
-            compiler_version: default
-            generator: msvc2026
+            compiler_version: msvc_2022_17
+            generator: ninjamulticonfig
             generator_type: multiconfig
-            generator_cmake: Visual Studio 18 2026
-            runner: windows-2025-vs2026
-          - os: windows
-            os_version: v10
-            architecture: x64
-            architecture_variant: generic
-            compiler: msvcclang
-            compiler_version: default
-            generator: msvc2022
-            generator_type: multiconfig
-            generator_cmake: Visual Studio 17 2022
+            generator_cmake: Ninja Multi-Config
             runner: windows-2022
           - os: windows
             os_version: v10
             architecture: x64
             architecture_variant: generic
             compiler: msvcclang
-            compiler_version: default
-            generator: msvc2026
+            toolset: ClangCL
+            compiler_version: msvc_2022_17
+            generator: ninja
+            generator_type: singleconfig
+            generator_cmake: Ninja
+            runner: windows-2022
+          - os: windows
+            os_version: v10
+            architecture: x64
+            architecture_variant: generic
+            compiler: msvcclang
+            toolset: ClangCL
+            compiler_version: msvc_2022_17
+            generator: ninjamulticonfig
             generator_type: multiconfig
-            generator_cmake: Visual Studio 18 2026
+            generator_cmake: Ninja Multi-Config
+            runner: windows-2022
+          - os: windows
+            os_version: v10
+            architecture: x64
+            architecture_variant: generic
+            compiler: msvc
+            compiler_version: msvc_2026_18
+            generator: ninja
+            generator_type: singleconfig
+            generator_cmake: Ninja
+            runner: windows-2025-vs2026
+          - os: windows
+            os_version: v10
+            architecture: x64
+            architecture_variant: generic
+            compiler: msvc
+            compiler_version: msvc_2026_18
+            generator: ninjamulticonfig
+            generator_type: multiconfig
+            generator_cmake: Ninja Multi-Config
+            runner: windows-2025-vs2026
+          - os: windows
+            os_version: v10
+            architecture: x64
+            architecture_variant: generic
+            compiler: msvcclang
+            toolset: ClangCL
+            compiler_version: msvc_2026_18
+            generator: ninja
+            generator_type: singleconfig
+            generator_cmake: Ninja
+            runner: windows-2025-vs2026
+          - os: windows
+            os_version: v10
+            architecture: x64
+            architecture_variant: generic
+            compiler: msvcclang
+            toolset: ClangCL
+            compiler_version: msvc_2026_18
+            generator: ninjamulticonfig
+            generator_type: multiconfig
+            generator_cmake: Ninja Multi-Config
             runner: windows-2025-vs2026
 
     steps:
@@ -189,7 +233,7 @@ jobs:
         with:
           repository: qt/qt5.git
           path: workspace/qt6
-          ref: v6.10.2
+          ref: v6.11.1
           fetch-depth: 1
 
       - name: Run command install apt packages
@@ -232,6 +276,15 @@ jobs:
             libxi-dev
             libxkbcommon-dev
             libxkbcommon-x11-dev
+            libopenjp2-7
+            libxss-dev
+            libxcb-render-util0-dev
+            libudev-dev
+            libwayland-dev
+            libnss3-dev
+            gperf
+            doxygen
+            python3-html5lib
           )
           
           missing=()
@@ -249,6 +302,25 @@ jobs:
           else
             echo "All packages already installed."
           fi
+
+      - name: Run command Free disk space (Linux-Ubuntu)
+        if: ${{ matrix.os == 'linux' && startsWith(matrix.os_version, 'ubuntu') }}
+        shell: bash
+        run: |
+          # Show available space
+          df -h
+          
+          # Remove unnecessary tools/packages (do not fail if they are not installed)
+          sudo apt-get remove -y '^ghc-8.*' '^dotnet-.*' '^mongodb.*' 'mysql-.*' 'php.*' 'powershell' 'snap.*' || true
+          sudo apt-get autoremove -y
+          sudo apt-get clean
+          
+          # Remove large directories
+          sudo rm -rf /usr/local/lib/android || true
+          sudo rm -rf /opt/hostedtoolcache || true
+          
+          # Show available space
+          df -h
 
       - name: Run command init repo (Linux-Ubuntu)
         if: ${{ matrix.os == 'linux' && startsWith(matrix.os_version, 'ubuntu') }}
@@ -273,6 +345,7 @@ jobs:
           GENERATOR_CMAKE="${{ matrix.generator_cmake }}"
           C_COMPILER="${{ matrix.c_compiler }}"
           CPP_COMPILER="${{ matrix.cpp_compiler }}"
+          TOOLSET="${{ matrix.toolset }}"
           
           : "${FOLDER_NAME:?missing FOLDER_NAME}"
           : "${GENERATOR_TYPE:?missing GENERATOR_TYPE}"
@@ -280,12 +353,18 @@ jobs:
           : "${GENERATOR_TYPE_MULTICONFIG:?missing GENERATOR_TYPE_MULTICONFIG}"
           : "${GENERATOR_CMAKE:?missing GENERATOR_CMAKE}"
           
+          CMAKE_ARGS=()
+          
+          [[ -n "$C_COMPILER"   ]] && CMAKE_ARGS+=("-DCMAKE_C_COMPILER=$C_COMPILER")
+          [[ -n "$CPP_COMPILER" ]] && CMAKE_ARGS+=("-DCMAKE_CXX_COMPILER=$CPP_COMPILER")
+          [[ -n "$TOOLSET"      ]] && CMAKE_ARGS+=("-DCMAKE_GENERATOR_TOOLSET=$TOOLSET")
+          
           mkdir -p "install/${FOLDER_NAME}/qt6"
           
           if [[ "${GENERATOR_TYPE}" == "${GENERATOR_TYPE_SINGLECONFIG}" ]]; then
               mkdir -p "build/${FOLDER_NAME}/qt6/debug"
               cd "build/${FOLDER_NAME}/qt6/debug"
-              "${WORKSPACE_ROOT}/qt6/configure" -debug -cmake-generator "${GENERATOR_CMAKE}" ${C_COMPILER:+-DCMAKE_C_COMPILER="${C_COMPILER}"} ${CPP_COMPILER:+-DCMAKE_CXX_COMPILER="${CPP_COMPILER}"} -prefix "${WORKSPACE_ROOT}/install/${FOLDER_NAME}/qt6"
+              "${WORKSPACE_ROOT}/qt6/configure" -no-pch -debug -cmake-generator "${GENERATOR_CMAKE}" "${CMAKE_ARGS[@]}" -prefix "${WORKSPACE_ROOT}/install/${FOLDER_NAME}/qt6"
               cmake --build . --parallel 4
               cmake --install .
           
@@ -293,16 +372,16 @@ jobs:
           
               mkdir -p "build/${FOLDER_NAME}/qt6/release"
               cd "build/${FOLDER_NAME}/qt6/release"
-              "${WORKSPACE_ROOT}/qt6/configure" -release -cmake-generator "${GENERATOR_CMAKE}" ${C_COMPILER:+-DCMAKE_C_COMPILER="${C_COMPILER}"} ${CPP_COMPILER:+-DCMAKE_CXX_COMPILER="${CPP_COMPILER}"} -prefix "${WORKSPACE_ROOT}/install/${FOLDER_NAME}/qt6"
+              "${WORKSPACE_ROOT}/qt6/configure" -no-pch -release -cmake-generator "${GENERATOR_CMAKE}" "${CMAKE_ARGS[@]}" -prefix "${WORKSPACE_ROOT}/install/${FOLDER_NAME}/qt6"
               cmake --build . --parallel 4
               cmake --install .
           
           elif [[ "${GENERATOR_TYPE}" == "${GENERATOR_TYPE_MULTICONFIG}" ]]; then
               mkdir -p "build/${FOLDER_NAME}/qt6"
               cd "build/${FOLDER_NAME}/qt6"
-              "${WORKSPACE_ROOT}/qt6/configure" -cmake-generator "${GENERATOR_CMAKE}" ${C_COMPILER:+-DCMAKE_C_COMPILER="${C_COMPILER}"} ${CPP_COMPILER:+-DCMAKE_CXX_COMPILER="${CPP_COMPILER}"} -prefix "${WORKSPACE_ROOT}/install/${FOLDER_NAME}/qt6"
-              cmake --build . --config Debug --parallel 4
-              cmake --build . --config Release --parallel 4
+              "${WORKSPACE_ROOT}/qt6/configure" -no-pch  -cmake-generator "${GENERATOR_CMAKE}" "${CMAKE_ARGS[@]}" -prefix "${WORKSPACE_ROOT}/install/${FOLDER_NAME}/qt6"
+              cmake --build . --parallel 4 --config Debug
+              cmake --build . --parallel 4 --config Release
               cmake --install . --config Debug
               cmake --install . --config Release
           
@@ -327,6 +406,16 @@ jobs:
           
           cd workspace
           
+          if (!(Test-Path ".venv")) {
+              python -m venv .venv
+          }
+          
+          & ".\.venv\Scripts\Activate.ps1"
+          
+          python -m pip install --upgrade pip
+          
+          pip install html5lib
+          
           $WORKSPACE_ROOT = Get-Location
           $FOLDER_NAME = "csv1-${{ matrix.os }}-${{ matrix.os_version }}-${{ matrix.architecture }}-${{ matrix.architecture_variant }}-${{ matrix.compiler }}-${{ matrix.compiler_version }}-${{ matrix.generator }}"
           $GENERATOR_TYPE = "${{ matrix.generator_type }}"
@@ -335,12 +424,17 @@ jobs:
           $GENERATOR_CMAKE = "${{ matrix.generator_cmake }}"
           $C_COMPILER = "${{ matrix.c_compiler }}"
           $CPP_COMPILER = "${{ matrix.cpp_compiler }}"
+          $TOOLSET="${{ matrix.toolset }}"
           
           New-Item -ItemType Directory -Force -Path "$WORKSPACE_ROOT/install/$FOLDER_NAME/qt6" | Out-Null
           
           $CMAKE_ARGS = @()
+          $CMAKE_ARGS += "-DCMAKE_RC_COMPILER_INIT=rc.exe"
+          $CMAKE_ARGS += "-DCMAKE_RC_COMPILER=rc.exe"
+          $CMAKE_ARGS += "-DCMAKE_RC_USE_RESPONSE_FILE=ON"
           if ($C_COMPILER) { $CMAKE_ARGS += "-DCMAKE_C_COMPILER=$C_COMPILER" }
           if ($CPP_COMPILER) { $CMAKE_ARGS += "-DCMAKE_CXX_COMPILER=$CPP_COMPILER" }
+          if ($TOOLSET) { $CMAKE_ARGS += "-DCMAKE_GENERATOR_TOOLSET=$TOOLSET" }
           
           if ($GENERATOR_TYPE -eq $GENERATOR_TYPE_SINGLECONFIG) {
           
@@ -348,7 +442,7 @@ jobs:
               New-Item -ItemType Directory -Force -Path $DEBUG_DIR | Out-Null
               Set-Location $DEBUG_DIR
           
-              & "$WORKSPACE_ROOT/qt6/configure.bat" -debug -cmake-generator $GENERATOR_CMAKE @CMAKE_ARGS -prefix "$WORKSPACE_ROOT/install/$FOLDER_NAME/qt6"
+              & "$WORKSPACE_ROOT/qt6/configure.bat" -no-pch -debug -cmake-generator $GENERATOR_CMAKE @CMAKE_ARGS -prefix "$WORKSPACE_ROOT/install/$FOLDER_NAME/qt6"
               cmake --build . --parallel 4
               cmake --install .
           
@@ -356,7 +450,7 @@ jobs:
               New-Item -ItemType Directory -Force -Path $RELEASE_DIR | Out-Null
               Set-Location $RELEASE_DIR
           
-              & "$WORKSPACE_ROOT/qt6/configure.bat" -release -cmake-generator $GENERATOR_CMAKE @CMAKE_ARGS -prefix "$WORKSPACE_ROOT/install/$FOLDER_NAME/qt6"
+              & "$WORKSPACE_ROOT/qt6/configure.bat" -no-pch -release -cmake-generator $GENERATOR_CMAKE @CMAKE_ARGS -prefix "$WORKSPACE_ROOT/install/$FOLDER_NAME/qt6"
               cmake --build . --parallel 4
               cmake --install .
           
@@ -367,10 +461,10 @@ jobs:
               New-Item -ItemType Directory -Force -Path $BUILD_DIR | Out-Null
               Set-Location $BUILD_DIR
           
-              & "$WORKSPACE_ROOT/qt6/configure.bat" -cmake-generator $GENERATOR_CMAKE @CMAKE_ARGS -prefix "$WORKSPACE_ROOT/install/$FOLDER_NAME/qt6"
+              & "$WORKSPACE_ROOT/qt6/configure.bat" -no-pch -cmake-generator $GENERATOR_CMAKE @CMAKE_ARGS -prefix "$WORKSPACE_ROOT/install/$FOLDER_NAME/qt6"
           
-              cmake --build . --config Debug --parallel 4
-              cmake --build . --config Release --parallel 4
+              cmake --build . --parallel 4 --config Debug
+              cmake --build . --parallel 4 --config Release
           
               cmake --install . --config Debug
               cmake --install . --config Release
@@ -409,5 +503,5 @@ jobs:
       - name: Upload Artifacts
         uses: actions/upload-artifact@v7
         with:
-          name: Qt6-v6.10.2-csv1-${{ matrix.os }}-${{ matrix.os_version }}-${{ matrix.architecture }}-${{ matrix.architecture_variant }}-${{ matrix.compiler }}-${{ matrix.compiler_version }}-${{ matrix.generator }}
+          name: Qt6-v6.11.1-csv1-${{ matrix.os }}-${{ matrix.os_version }}-${{ matrix.architecture }}-${{ matrix.architecture_variant }}-${{ matrix.compiler }}-${{ matrix.compiler_version }}-${{ matrix.generator }}
           path: workspace/install/csv1-${{ matrix.os }}-${{ matrix.os_version }}-${{ matrix.architecture }}-${{ matrix.architecture_variant }}-${{ matrix.compiler }}-${{ matrix.compiler_version }}-${{ matrix.generator }}/*.tar.gz
