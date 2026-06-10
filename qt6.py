@@ -265,7 +265,7 @@ def create_orchestrator() -> OptionalOrchestratorWithReport:
                 + repo_name
                 + '"',
                 "",
-                "    cmake --build . --parallel 4",
+                "    cmake --build .",
                 "",
                 "    cmake --install .",
                 "",
@@ -279,9 +279,9 @@ def create_orchestrator() -> OptionalOrchestratorWithReport:
                 + repo_name
                 + '"',
                 "",
-                "    cmake --build . --parallel 4 --config Debug",
+                "    cmake --build . --config Debug",
                 "",
-                "    cmake --build . --parallel 4 --config Release",
+                "    cmake --build . --config Release",
                 "",
                 "    cmake --install . --config Debug",
                 "",
@@ -416,6 +416,7 @@ def create_orchestrator() -> OptionalOrchestratorWithReport:
                 'if ($C_COMPILER) { $CMAKE_ARGS += "-DCMAKE_C_COMPILER=$C_COMPILER" }',
                 'if ($CPP_COMPILER) { $CMAKE_ARGS += "-DCMAKE_CXX_COMPILER=$CPP_COMPILER" }',
                 'if ($TOOLSET) { $CMAKE_ARGS += "-DCMAKE_GENERATOR_TOOLSET=$TOOLSET" }',
+                '$CMAKE_ARGS += \'-DCMAKE_CXX_FLAGS="/D_SILENCE_EXPERIMENTAL_COROUTINE_DEPRECATION_WARNINGS"\'',
                 "",
                 "if ($GENERATOR_TYPE -eq $GENERATOR_TYPE_SINGLECONFIG) {",
                 "",
