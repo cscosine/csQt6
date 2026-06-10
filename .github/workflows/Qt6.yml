@@ -46,7 +46,8 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - os: linux
+          - execution_id: 0
+            os: linux
             os_version: ubuntu22.04
             architecture: x64
             architecture_variant: generic
@@ -58,19 +59,8 @@ jobs:
             generator_type: singleconfig
             generator_cmake: Ninja
             runner: ubuntu-22.04
-          - os: linux
-            os_version: ubuntu22.04
-            architecture: x64
-            architecture_variant: generic
-            compiler: gcc
-            c_compiler: gcc
-            cpp_compiler: g++
-            compiler_version: default
-            generator: ninjamulticonfig
-            generator_type: multiconfig
-            generator_cmake: Ninja Multi-Config
-            runner: ubuntu-22.04
-          - os: linux
+          - execution_id: 1
+            os: linux
             os_version: ubuntu22.04
             architecture: x64
             architecture_variant: generic
@@ -82,19 +72,8 @@ jobs:
             generator_type: singleconfig
             generator_cmake: Ninja
             runner: ubuntu-22.04
-          - os: linux
-            os_version: ubuntu22.04
-            architecture: x64
-            architecture_variant: generic
-            compiler: clang
-            c_compiler: clang
-            cpp_compiler: clang++
-            compiler_version: default
-            generator: ninjamulticonfig
-            generator_type: multiconfig
-            generator_cmake: Ninja Multi-Config
-            runner: ubuntu-22.04
-          - os: linux
+          - execution_id: 2
+            os: linux
             os_version: ubuntu24.04
             architecture: x64
             architecture_variant: generic
@@ -106,19 +85,8 @@ jobs:
             generator_type: singleconfig
             generator_cmake: Ninja
             runner: ubuntu-24.04
-          - os: linux
-            os_version: ubuntu24.04
-            architecture: x64
-            architecture_variant: generic
-            compiler: gcc
-            c_compiler: gcc
-            cpp_compiler: g++
-            compiler_version: default
-            generator: ninjamulticonfig
-            generator_type: multiconfig
-            generator_cmake: Ninja Multi-Config
-            runner: ubuntu-24.04
-          - os: linux
+          - execution_id: 3
+            os: linux
             os_version: ubuntu24.04
             architecture: x64
             architecture_variant: generic
@@ -130,19 +98,8 @@ jobs:
             generator_type: singleconfig
             generator_cmake: Ninja
             runner: ubuntu-24.04
-          - os: linux
-            os_version: ubuntu24.04
-            architecture: x64
-            architecture_variant: generic
-            compiler: clang
-            c_compiler: clang
-            cpp_compiler: clang++
-            compiler_version: default
-            generator: ninjamulticonfig
-            generator_type: multiconfig
-            generator_cmake: Ninja Multi-Config
-            runner: ubuntu-24.04
-          - os: windows
+          - execution_id: 4
+            os: windows
             os_version: v10
             architecture: x64
             architecture_variant: generic
@@ -152,17 +109,8 @@ jobs:
             generator_type: singleconfig
             generator_cmake: Ninja
             runner: windows-2022
-          - os: windows
-            os_version: v10
-            architecture: x64
-            architecture_variant: generic
-            compiler: msvc
-            compiler_version: msvc_2022_17
-            generator: ninjamulticonfig
-            generator_type: multiconfig
-            generator_cmake: Ninja Multi-Config
-            runner: windows-2022
-          - os: windows
+          - execution_id: 5
+            os: windows
             os_version: v10
             architecture: x64
             architecture_variant: generic
@@ -173,18 +121,8 @@ jobs:
             generator_type: singleconfig
             generator_cmake: Ninja
             runner: windows-2022
-          - os: windows
-            os_version: v10
-            architecture: x64
-            architecture_variant: generic
-            compiler: msvcclang
-            toolset: ClangCL
-            compiler_version: msvc_2022_17
-            generator: ninjamulticonfig
-            generator_type: multiconfig
-            generator_cmake: Ninja Multi-Config
-            runner: windows-2022
-          - os: windows
+          - execution_id: 6
+            os: windows
             os_version: v10
             architecture: x64
             architecture_variant: generic
@@ -194,17 +132,8 @@ jobs:
             generator_type: singleconfig
             generator_cmake: Ninja
             runner: windows-2025-vs2026
-          - os: windows
-            os_version: v10
-            architecture: x64
-            architecture_variant: generic
-            compiler: msvc
-            compiler_version: msvc_2026_18
-            generator: ninjamulticonfig
-            generator_type: multiconfig
-            generator_cmake: Ninja Multi-Config
-            runner: windows-2025-vs2026
-          - os: windows
+          - execution_id: 7
+            os: windows
             os_version: v10
             architecture: x64
             architecture_variant: generic
@@ -214,17 +143,6 @@ jobs:
             generator: ninja
             generator_type: singleconfig
             generator_cmake: Ninja
-            runner: windows-2025-vs2026
-          - os: windows
-            os_version: v10
-            architecture: x64
-            architecture_variant: generic
-            compiler: msvcclang
-            toolset: ClangCL
-            compiler_version: msvc_2026_18
-            generator: ninjamulticonfig
-            generator_type: multiconfig
-            generator_cmake: Ninja Multi-Config
             runner: windows-2025-vs2026
 
     steps:
@@ -242,14 +160,6 @@ jobs:
         run: |
           set -euo pipefail # enable strict mode
           
-          if [ -t 0 ]; then
-              # if running in interactive terminal, ask for password if needed
-              SUDO="sudo"
-          else
-              # if running in a non-interactive terminal (e.g. in CI workflows), use sudo without 
-              #   password prompt (fail if password is needed)
-              SUDO="sudo -n"
-          fi
           
           packages=(
             libfontconfig1-dev
@@ -338,7 +248,8 @@ jobs:
           cd workspace/
           
           WORKSPACE_ROOT=$(pwd)
-          FOLDER_NAME="csv1-${{ matrix.os }}-${{ matrix.os_version }}-${{ matrix.architecture }}-${{ matrix.architecture_variant }}-${{ matrix.compiler }}-${{ matrix.compiler_version }}-${{ matrix.generator }}"
+          INSTALL_FOLDER_NAME="csv1-${{ matrix.os }}-${{ matrix.os_version }}-${{ matrix.architecture }}-${{ matrix.architecture_variant }}-${{ matrix.compiler }}-${{ matrix.compiler_version }}-${{ matrix.generator }}"
+          BUILD_FOLDER_NAME="build-${{ matrix.execution_id }}"
           GENERATOR_TYPE="${{ matrix.generator_type }}"
           GENERATOR_TYPE_SINGLECONFIG="singleconfig"
           GENERATOR_TYPE_MULTICONFIG="multiconfig"
@@ -347,7 +258,8 @@ jobs:
           CPP_COMPILER="${{ matrix.cpp_compiler }}"
           TOOLSET="${{ matrix.toolset }}"
           
-          : "${FOLDER_NAME:?missing FOLDER_NAME}"
+          : "${INSTALL_FOLDER_NAME:?missing INSTALL_FOLDER_NAME}"
+          : "${BUILD_FOLDER_NAME:?missing BUILD_FOLDER_NAME}"
           : "${GENERATOR_TYPE:?missing GENERATOR_TYPE}"
           : "${GENERATOR_TYPE_SINGLECONFIG:?missing GENERATOR_TYPE_SINGLECONFIG}"
           : "${GENERATOR_TYPE_MULTICONFIG:?missing GENERATOR_TYPE_MULTICONFIG}"
@@ -359,36 +271,78 @@ jobs:
           [[ -n "$CPP_COMPILER" ]] && CMAKE_ARGS+=("-DCMAKE_CXX_COMPILER=$CPP_COMPILER")
           [[ -n "$TOOLSET"      ]] && CMAKE_ARGS+=("-DCMAKE_GENERATOR_TOOLSET=$TOOLSET")
           
-          mkdir -p "install/${FOLDER_NAME}/qt6"
+          mkdir -p "install/${INSTALL_FOLDER_NAME}/qt6"
           
           if [[ "${GENERATOR_TYPE}" == "${GENERATOR_TYPE_SINGLECONFIG}" ]]; then
-              mkdir -p "build/${FOLDER_NAME}/qt6/debug"
-              cd "build/${FOLDER_NAME}/qt6/debug"
-              "${WORKSPACE_ROOT}/qt6/configure" -no-pch -debug -cmake-generator "${GENERATOR_CMAKE}" "${CMAKE_ARGS[@]}" -prefix "${WORKSPACE_ROOT}/install/${FOLDER_NAME}/qt6"
+              mkdir -p "build/${BUILD_FOLDER_NAME}/qt6/debug"
+              cd "build/${BUILD_FOLDER_NAME}/qt6/debug"
+          
+              "${WORKSPACE_ROOT}/qt6/configure" -no-pch -debug -cmake-generator "${GENERATOR_CMAKE}" "${CMAKE_ARGS[@]}" -prefix "${WORKSPACE_ROOT}/install/${INSTALL_FOLDER_NAME}/qt6"
+          
               cmake --build . --parallel 4
+          
               cmake --install .
+          
           
               cd "${WORKSPACE_ROOT}"
           
-              mkdir -p "build/${FOLDER_NAME}/qt6/release"
-              cd "build/${FOLDER_NAME}/qt6/release"
-              "${WORKSPACE_ROOT}/qt6/configure" -no-pch -release -cmake-generator "${GENERATOR_CMAKE}" "${CMAKE_ARGS[@]}" -prefix "${WORKSPACE_ROOT}/install/${FOLDER_NAME}/qt6"
+              mkdir -p "build/${BUILD_FOLDER_NAME}/qt6/release"
+              cd "build/${BUILD_FOLDER_NAME}/qt6/release"
+          
+              "${WORKSPACE_ROOT}/qt6/configure" -no-pch -release -cmake-generator "${GENERATOR_CMAKE}" "${CMAKE_ARGS[@]}" -prefix "${WORKSPACE_ROOT}/install/${INSTALL_FOLDER_NAME}/qt6"
+          
               cmake --build . --parallel 4
+          
               cmake --install .
           
           elif [[ "${GENERATOR_TYPE}" == "${GENERATOR_TYPE_MULTICONFIG}" ]]; then
-              mkdir -p "build/${FOLDER_NAME}/qt6"
-              cd "build/${FOLDER_NAME}/qt6"
-              "${WORKSPACE_ROOT}/qt6/configure" -no-pch  -cmake-generator "${GENERATOR_CMAKE}" "${CMAKE_ARGS[@]}" -prefix "${WORKSPACE_ROOT}/install/${FOLDER_NAME}/qt6"
+              mkdir -p "build/${BUILD_FOLDER_NAME}/qt6"
+              cd "build/${BUILD_FOLDER_NAME}/qt6"
+          
+              "${WORKSPACE_ROOT}/qt6/configure" -no-pch  -cmake-generator "${GENERATOR_CMAKE}" "${CMAKE_ARGS[@]}" -prefix "${WORKSPACE_ROOT}/install/${INSTALL_FOLDER_NAME}/qt6"
+          
               cmake --build . --parallel 4 --config Debug
+          
               cmake --build . --parallel 4 --config Release
+          
               cmake --install . --config Debug
+          
               cmake --install . --config Release
           
           else
               echo "Unknown generator_type: ${GENERATOR_TYPE}"
               exit 1
           fi
+
+      - name: Setup MSVC
+        uses: TheMrMilchmann/setup-msvc-dev@v4
+        if: ${{ matrix.os == 'windows' }}
+        with:
+          arch: ${{ matrix.architecture }}
+
+      - name: Run command Show MSVC Version (Windows)
+        if: ${{ matrix.os == 'windows' }}
+        shell: powershell
+        run: |
+          Write-Host "=== Visual Studio ==="
+          
+          & "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" `
+              -latest `
+              -products * `
+              -property installationName
+          
+          & "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" `
+              -latest `
+              -products * `
+              -property catalog_productDisplayVersion
+          
+          Write-Host ""
+          Write-Host "=== MSVC ==="
+          
+          $cl = Get-Command cl.exe -ErrorAction Stop
+          
+          Write-Host "cl.exe:"
+          Write-Host $cl.Source
 
       - name: Run command init repo (Windows)
         if: ${{ matrix.os == 'windows' }}
@@ -404,6 +358,13 @@ jobs:
           Set-StrictMode -Version Latest
           $ErrorActionPreference = 'Stop'
           
+          # Enable long path support (Windows 10+)
+          try {
+              New-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\FileSystem\" -Name "LongPathsEnabled" -Value 1 -Force | Out-Null
+          } catch {
+              Write-Host "Unable to enable long paths, continuing..."
+          }
+          
           cd workspace
           
           if (!(Test-Path ".venv")) {
@@ -417,7 +378,8 @@ jobs:
           pip install html5lib
           
           $WORKSPACE_ROOT = Get-Location
-          $FOLDER_NAME = "csv1-${{ matrix.os }}-${{ matrix.os_version }}-${{ matrix.architecture }}-${{ matrix.architecture_variant }}-${{ matrix.compiler }}-${{ matrix.compiler_version }}-${{ matrix.generator }}"
+          $BUILD_FOLDER_NAME = "build-${{ matrix.execution_id }}"
+          $INSTALL_FOLDER_NAME = "csv1-${{ matrix.os }}-${{ matrix.os_version }}-${{ matrix.architecture }}-${{ matrix.architecture_variant }}-${{ matrix.compiler }}-${{ matrix.compiler_version }}-${{ matrix.generator }}"
           $GENERATOR_TYPE = "${{ matrix.generator_type }}"
           $GENERATOR_TYPE_SINGLECONFIG = "singleconfig"
           $GENERATOR_TYPE_MULTICONFIG = "multiconfig"
@@ -426,7 +388,7 @@ jobs:
           $CPP_COMPILER = "${{ matrix.cpp_compiler }}"
           $TOOLSET="${{ matrix.toolset }}"
           
-          New-Item -ItemType Directory -Force -Path "$WORKSPACE_ROOT/install/$FOLDER_NAME/qt6" | Out-Null
+          New-Item -ItemType Directory -Force -Path "$WORKSPACE_ROOT/install/$INSTALL_FOLDER_NAME/qt6" | Out-Null
           
           $CMAKE_ARGS = @()
           $CMAKE_ARGS += "-DCMAKE_RC_COMPILER_INIT=rc.exe"
@@ -438,42 +400,160 @@ jobs:
           
           if ($GENERATOR_TYPE -eq $GENERATOR_TYPE_SINGLECONFIG) {
           
-              $DEBUG_DIR = "$WORKSPACE_ROOT/build/$FOLDER_NAME/qt6/debug"
+              $DEBUG_DIR = "$WORKSPACE_ROOT/build/$BUILD_FOLDER_NAME/qt6/debug"
               New-Item -ItemType Directory -Force -Path $DEBUG_DIR | Out-Null
               Set-Location $DEBUG_DIR
           
-              & "$WORKSPACE_ROOT/qt6/configure.bat" -no-pch -debug -cmake-generator $GENERATOR_CMAKE @CMAKE_ARGS -prefix "$WORKSPACE_ROOT/install/$FOLDER_NAME/qt6"
-              cmake --build . --parallel 4
-              cmake --install .
+              & "$WORKSPACE_ROOT/qt6/configure.bat" -no-pch -debug -cmake-generator $GENERATOR_CMAKE @CMAKE_ARGS -prefix "$WORKSPACE_ROOT/install/$INSTALL_FOLDER_NAME/qt6"
+              if ($LASTEXITCODE) { exit $LASTEXITCODE }
           
-              $RELEASE_DIR = "$WORKSPACE_ROOT/build/$FOLDER_NAME/qt6/release"
+              cmake --build . --parallel 4
+              if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          
+              cmake --install .
+              if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          
+          
+              $RELEASE_DIR = "$WORKSPACE_ROOT/build/$BUILD_FOLDER_NAME/qt6/release"
               New-Item -ItemType Directory -Force -Path $RELEASE_DIR | Out-Null
               Set-Location $RELEASE_DIR
           
-              & "$WORKSPACE_ROOT/qt6/configure.bat" -no-pch -release -cmake-generator $GENERATOR_CMAKE @CMAKE_ARGS -prefix "$WORKSPACE_ROOT/install/$FOLDER_NAME/qt6"
+              & "$WORKSPACE_ROOT/qt6/configure.bat" -no-pch -release -cmake-generator $GENERATOR_CMAKE @CMAKE_ARGS -prefix "$WORKSPACE_ROOT/install/$INSTALL_FOLDER_NAME/qt6"
+              if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          
               cmake --build . --parallel 4
+              if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          
               cmake --install .
+              if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          
           
           }
           elseif ($GENERATOR_TYPE -eq $GENERATOR_TYPE_MULTICONFIG) {
           
-              $BUILD_DIR = "$WORKSPACE_ROOT/build/$FOLDER_NAME/qt6"
+              $BUILD_DIR = "$WORKSPACE_ROOT/build/$BUILD_FOLDER_NAME/qt6"
               New-Item -ItemType Directory -Force -Path $BUILD_DIR | Out-Null
               Set-Location $BUILD_DIR
           
-              & "$WORKSPACE_ROOT/qt6/configure.bat" -no-pch -cmake-generator $GENERATOR_CMAKE @CMAKE_ARGS -prefix "$WORKSPACE_ROOT/install/$FOLDER_NAME/qt6"
+              & "$WORKSPACE_ROOT/qt6/configure.bat" -no-pch -cmake-generator $GENERATOR_CMAKE @CMAKE_ARGS -prefix "$WORKSPACE_ROOT/install/$INSTALL_FOLDER_NAME/qt6"
+              if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          
           
               cmake --build . --parallel 4 --config Debug
+              if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          
               cmake --build . --parallel 4 --config Release
+              if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          
           
               cmake --install . --config Debug
+              if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          
               cmake --install . --config Release
+          
+              if ($LASTEXITCODE) { exit $LASTEXITCODE }
           
           }
           else {
               Write-Host "Unknown generator_type: $GENERATOR_TYPE"
               exit 1
           }
+
+      - name: Get Versions
+        id: versions
+        shell: python
+        run: |
+          from pathlib import Path
+          import re
+          import json
+          import sys
+          import os
+          
+          def grep_package_version(filename: Path) -> tuple[str | None, str | None]:
+              path = Path(filename)
+          
+              if not path.is_file():
+                  return (None, f"ERROR: file not found: {path}")
+          
+              content = path.read_text(encoding="utf-8")
+          
+              matches = []
+          
+              for m in re.finditer(
+                  r'set\s*\(\s*PACKAGE_VERSION\s+("([^"]*)"|([^\s\)]+))\s*\)',
+                  content,
+              ):
+                  value = m.group(2) or m.group(3)
+          
+                  # Ignore computed values like "${PACKAGE_VERSION} (...)"
+                  if "${" in value:
+                      continue
+          
+                  matches.append(value)
+          
+              if len(matches) != 1:
+                  return (None, f"ERROR: {path}: expected exactly one PACKAGE_VERSION definition, found {len(matches)}")
+          
+              version = matches[0]
+              return (version, None)
+          
+          def find_cmake_config_version(search_path: Path, name: str) -> tuple[Path | None, str | None]:
+              candidates = {
+                  f"{name}-config-version.cmake".lower(),
+                  f"{name}ConfigVersion.cmake".lower(),
+              }
+          
+              matches = [p for p in search_path.rglob("*") if p.is_file() and p.name.lower() in candidates]
+          
+              if not matches:
+                  return (None, f"No config version file found for '{name}' under '{search_path}'")
+          
+              if len(matches) > 1:
+                  return (None, "Multiple config version files found:" + ", ".join(str(p) for p in matches))
+          
+              return (matches[0], None)
+          
+          files = {
+          }
+          
+          result = []
+          for name, filename in files.items():
+            v_or_err = grep_package_version(filename=filename)
+            if v_or_err[0] is not None:
+                version = v_or_err[0]
+                result.append({'name': name,'version': version})
+            elif v_or_err[1] is not None:
+                sys.exit(f'ERROR: processing {name} at {filename}: {v_or_err[1]}')
+            else:
+                sys.exit('ERROR: unexpected behavior of grep_package_version processing {name} at {filename}')
+          
+          repos_auto_search_list = [
+              "qt6",
+          ]
+          
+          for name in repos_auto_search_list:
+            search_path: Path = Path('workspace/install/csv1-${{ matrix.os }}-${{ matrix.os_version }}-${{ matrix.architecture }}-${{ matrix.architecture_variant }}-${{ matrix.compiler }}-${{ matrix.compiler_version }}-${{ matrix.generator }}') / name
+            path_or_err = find_cmake_config_version(search_path=search_path, name=name)
+            if path_or_err[0] is not None:
+              path = path_or_err[0]
+              v_or_err = grep_package_version(filename=path)
+              if v_or_err[0] is not None:
+                version = v_or_err[0]
+                result.append({'name': name,'version': version})
+              elif v_or_err[1] is not None:
+                sys.exit(f'ERROR: processing {name} at {path}: {v_or_err[1]}')
+              else:
+                sys.exit('ERROR: unexpected behavior of grep_package_version processing {name} at {path}')
+            elif path_or_err[1] is not None:
+                sys.exit(f'ERROR: processing {name} : {path_or_err[1]}')
+            else:
+                sys.exit('ERROR: unexpected behavior of find_cmake_config_version processing {name}')
+          
+          
+          output_file = os.environ["GITHUB_OUTPUT"]
+          with open(output_file, "w", encoding="utf-8") as f:
+              f.write(f"packages={json.dumps(result)}\n")
+          
 
       - name: Create Archives
         env:

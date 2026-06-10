@@ -8,7 +8,6 @@ from csorchestrator.core.report import Report
 from csorchestrator.context.context_os_architecture import OS, UBUNTU_STRING_PREFIX
 from csorchestrator.step.step_utils import StepExecuteOnlyOn
 from csorchestrator.orchestrator.orchestrator import (
-    Orchestrator,
     OptionalOrchestratorWithReport,
     create_orchestrator_factory_all_supported_cases,
 )
@@ -27,12 +26,13 @@ from csorchestrator.step.step_custom_command import (
     StepWinPSCommand,
     StepInstallAptPackages,
 )
+from csorchestrator.ci.github.github_workflow_config import MatrixOsArchCompilerGeneratorRunnerEntryInclude
+
+from csorchestrator.step.step_github_action import StepAddGitHubAction
+
 from csorchestrator.utils.presets.supported_variants import BuildConfig
 from csorchestrator.core.optional_result_with_report import OptionalResultWithReport
 from csorchestrator.cli.cli import orchestrator_main_with_default_run
-from csorchestrator.context.context_os_architecture_compiler_generator import (
-    ExecutionMatrixOsArchCompilerGenerator,
-)
 from csorchestrator.ci.github.github_workflow_config import (
     CreateGitHubWorkflowConfig,
     Cron,
@@ -57,8 +57,12 @@ def create_orchestrator() -> OptionalOrchestratorWithReport:
     qt_version_tag = "v6.11.1"
 
     o = create_orchestrator_factory_all_supported_cases(
-        "Qt6", version=qt_version_tag, execution_matrix_name="orchestrator-matrix",
-        use_ninja_for_windows = True
+        "Qt6",
+        version=qt_version_tag,
+        execution_matrix_name="orchestrator-matrix",
+        use_ninja_for_windows=True,
+        use_ninja=True,
+        use_ninjamulti=False,
     )
 
     o.create_default_github_workflow(
@@ -83,13 +87,15 @@ def create_orchestrator() -> OptionalOrchestratorWithReport:
     flag_repo_update = True
     dry_run = False
 
+    repo_name = "qt6"
+
     p = o.create_phase("Repo Update")
     if flag_repo_update:
         p.add_step(
             StepGetRepositoryGitHub(
-                name="qt6",
-                description=f"Clone or pull-ff qt6",
-                target_directory=(base_target_dir / "qt6").as_posix(),
+                name=repo_name,
+                description=f"Clone or pull-ff {repo_name}",
+                target_directory=(base_target_dir / repo_name).as_posix(),
                 repo_url_parts=RepoUrlParts(
                     repo_base_url=StepGetRepositoryGitHub.GITHUB_BASE_URL_SSH,
                     repo_org="qt",
@@ -105,6 +111,8 @@ def create_orchestrator() -> OptionalOrchestratorWithReport:
             )
             .add_extra(StepExecuteOnlyOncePerMatrix())
         )
+
+    # ----------------- LINUX -----------------
 
     p = o.create_phase("Install Requirements (Linux-Ubuntu)")
     p.add_step(
@@ -164,20 +172,22 @@ def create_orchestrator() -> OptionalOrchestratorWithReport:
                 "",
                 "# Remove unnecessary tools/packages (do not fail if they are not installed)",
                 "sudo apt-get remove -y '^ghc-8.*' '^dotnet-.*' '^mongodb.*' 'mysql-.*' 'php.*' 'powershell' 'snap.*' || true",
-                "sudo apt-get autoremove -y",
-                "sudo apt-get clean",
+                'sudo apt-get autoremove -y',
+                'sudo apt-get clean',
                 "",
                 "# Remove large directories",
-                "sudo rm -rf /usr/local/lib/android || true",
-                "sudo rm -rf /opt/hostedtoolcache || true",
+                'sudo rm -rf /usr/local/lib/android || true',
+                'sudo rm -rf /opt/hostedtoolcache || true',
                 "",
                 "# Show available space",
                 "df -h",
             ],
             dry_run=dry_run,
-        ).add_extra(
+        )
+        .add_extra(
             StepExecuteOnlyOn(os=OS.LINUX, version_starts_with=UBUNTU_STRING_PREFIX)
-        ).add_extra(StepSkipExecutionOnLocal())
+        )
+        .add_extra(StepSkipExecutionOnLocal())
     )
 
     p = o.create_phase(f"Configure-Build-Test-Install (Linux-Ubuntu)")
@@ -185,7 +195,7 @@ def create_orchestrator() -> OptionalOrchestratorWithReport:
         StepBashScriptCommand(
             name="init repo (Linux-Ubuntu)",
             description="init repo",
-            cmd=["cd workspace/qt6", "./init-repository"],
+            cmd=[f"cd workspace/{repo_name}", "./init-repository"],
             dry_run=dry_run,
         )
         .add_extra(StepExecuteOnlyOncePerMatrix())
@@ -204,7 +214,8 @@ def create_orchestrator() -> OptionalOrchestratorWithReport:
                 "cd workspace/",
                 "",
                 "WORKSPACE_ROOT=$(pwd)",
-                'FOLDER_NAME="$CS_DIR_FROM_MATRIX"',
+                'INSTALL_FOLDER_NAME="$CS_DIR_FROM_MATRIX"',
+                'BUILD_FOLDER_NAME="build-$CS_MATRIX_EXEC_ID"',
                 'GENERATOR_TYPE="$CS_GENERATOR_TYPE"',
                 'GENERATOR_TYPE_SINGLECONFIG="$CS_GENERATOR_TYPE_SINGLECONFIG"',
                 'GENERATOR_TYPE_MULTICONFIG="$CS_GENERATOR_TYPE_MULTICONFIG"',
@@ -213,42 +224,67 @@ def create_orchestrator() -> OptionalOrchestratorWithReport:
                 'CPP_COMPILER="$CS_CPP_COMPILER"',
                 'TOOLSET="$CS_TOOLSET"',
                 "",
-                ': "${FOLDER_NAME:?missing FOLDER_NAME}"',
+                ': "${INSTALL_FOLDER_NAME:?missing INSTALL_FOLDER_NAME}"',
+                ': "${BUILD_FOLDER_NAME:?missing BUILD_FOLDER_NAME}"',
                 ': "${GENERATOR_TYPE:?missing GENERATOR_TYPE}"',
                 ': "${GENERATOR_TYPE_SINGLECONFIG:?missing GENERATOR_TYPE_SINGLECONFIG}"',
                 ': "${GENERATOR_TYPE_MULTICONFIG:?missing GENERATOR_TYPE_MULTICONFIG}"',
                 ': "${GENERATOR_CMAKE:?missing GENERATOR_CMAKE}"',
                 "",
-                'CMAKE_ARGS=()',
-                '',
+                "CMAKE_ARGS=()",
+                "",
                 '[[ -n "$C_COMPILER"   ]] && CMAKE_ARGS+=("-DCMAKE_C_COMPILER=$C_COMPILER")',
                 '[[ -n "$CPP_COMPILER" ]] && CMAKE_ARGS+=("-DCMAKE_CXX_COMPILER=$CPP_COMPILER")',
                 '[[ -n "$TOOLSET"      ]] && CMAKE_ARGS+=("-DCMAKE_GENERATOR_TOOLSET=$TOOLSET")',
                 "",
-                'mkdir -p "install/${FOLDER_NAME}/qt6"',
+                'mkdir -p "install/${INSTALL_FOLDER_NAME}/' + repo_name + '"',
                 "",
                 'if [[ "${GENERATOR_TYPE}" == "${GENERATOR_TYPE_SINGLECONFIG}" ]]; then',
-                '    mkdir -p "build/${FOLDER_NAME}/qt6/debug"',
-                '    cd "build/${FOLDER_NAME}/qt6/debug"',
-                '    "${WORKSPACE_ROOT}/qt6/configure" -no-pch -debug -cmake-generator "${GENERATOR_CMAKE}" "${CMAKE_ARGS[@]}" -prefix "${WORKSPACE_ROOT}/install/${FOLDER_NAME}/qt6"',
+                '    mkdir -p "build/${BUILD_FOLDER_NAME}/' + repo_name + '/debug"',
+                '    cd "build/${BUILD_FOLDER_NAME}/' + repo_name + '/debug"',
+                "",
+                '    "${WORKSPACE_ROOT}/'
+                + repo_name
+                + '/configure" -no-pch -debug -cmake-generator "${GENERATOR_CMAKE}" "${CMAKE_ARGS[@]}" -prefix "${WORKSPACE_ROOT}/install/${INSTALL_FOLDER_NAME}/'
+                + repo_name
+                + '"',
+                "",
                 "    cmake --build . --parallel 4",
+                "",
                 "    cmake --install .",
+                "",
                 "",
                 '    cd "${WORKSPACE_ROOT}"',
                 "",
-                '    mkdir -p "build/${FOLDER_NAME}/qt6/release"',
-                '    cd "build/${FOLDER_NAME}/qt6/release"',
-                '    "${WORKSPACE_ROOT}/qt6/configure" -no-pch -release -cmake-generator "${GENERATOR_CMAKE}" "${CMAKE_ARGS[@]}" -prefix "${WORKSPACE_ROOT}/install/${FOLDER_NAME}/qt6"',
+                '    mkdir -p "build/${BUILD_FOLDER_NAME}/' + repo_name + '/release"',
+                '    cd "build/${BUILD_FOLDER_NAME}/' + repo_name + '/release"',
+                "",
+                '    "${WORKSPACE_ROOT}/'
+                + repo_name
+                + '/configure" -no-pch -release -cmake-generator "${GENERATOR_CMAKE}" "${CMAKE_ARGS[@]}" -prefix "${WORKSPACE_ROOT}/install/${INSTALL_FOLDER_NAME}/'
+                + repo_name
+                + '"',
+                "",
                 "    cmake --build . --parallel 4",
+                "",
                 "    cmake --install .",
                 "",
                 'elif [[ "${GENERATOR_TYPE}" == "${GENERATOR_TYPE_MULTICONFIG}" ]]; then',
-                '    mkdir -p "build/${FOLDER_NAME}/qt6"',
-                '    cd "build/${FOLDER_NAME}/qt6"',
-                '    "${WORKSPACE_ROOT}/qt6/configure" -no-pch  -cmake-generator "${GENERATOR_CMAKE}" "${CMAKE_ARGS[@]}" -prefix "${WORKSPACE_ROOT}/install/${FOLDER_NAME}/qt6"',
+                '    mkdir -p "build/${BUILD_FOLDER_NAME}/' + repo_name + '"',
+                '    cd "build/${BUILD_FOLDER_NAME}/' + repo_name + '"',
+                "",
+                '    "${WORKSPACE_ROOT}/'
+                + repo_name
+                + '/configure" -no-pch  -cmake-generator "${GENERATOR_CMAKE}" "${CMAKE_ARGS[@]}" -prefix "${WORKSPACE_ROOT}/install/${INSTALL_FOLDER_NAME}/'
+                + repo_name
+                + '"',
+                "",
                 "    cmake --build . --parallel 4 --config Debug",
+                "",
                 "    cmake --build . --parallel 4 --config Release",
+                "",
                 "    cmake --install . --config Debug",
+                "",
                 "    cmake --install . --config Release",
                 "",
                 "else",
@@ -262,12 +298,65 @@ def create_orchestrator() -> OptionalOrchestratorWithReport:
         )
     )
 
+    # ----------------- WINDOWS -----------------
+
     p = o.create_phase(f"Configure-Build-Test-Install (Windows)")
+
+    p.add_step(
+        StepAddGitHubAction(
+            name="Setup MSVC",
+            description="setup MSVC environment",
+            uses="TheMrMilchmann/setup-msvc-dev@v4",
+            with_list=[
+                f"arch: {MatrixOsArchCompilerGeneratorRunnerEntryInclude.MATRIX_ARCHITECTURE_EMBRACED}"
+            ]
+        ).add_extra(
+            StepExecuteOnlyOn(
+                os=OS.WINDOWS,
+            )
+        )
+    )
+
+    p.add_step(
+        StepWinPSCommand(
+            name="Show MSVC Version (Windows)",
+            description="show msvc verison",
+            cmd=[
+                'Write-Host "=== Visual Studio ==="',
+                "",
+                '& "${env:ProgramFiles(x86)}\\Microsoft Visual Studio\\Installer\\vswhere.exe" `',
+                "    -latest `",
+                "    -products * `",
+                "    -property installationName",
+                "",
+                '& "${env:ProgramFiles(x86)}\\Microsoft Visual Studio\\Installer\\vswhere.exe" `',
+                "    -latest `",
+                "    -products * `",
+                "    -property catalog_productDisplayVersion",
+                "",
+                'Write-Host ""',
+                'Write-Host "=== MSVC ==="',
+                "",
+                "$cl = Get-Command cl.exe -ErrorAction Stop",
+                "",
+                'Write-Host "cl.exe:"',
+                "Write-Host $cl.Source",
+             ],
+            dry_run=dry_run,
+        )
+        .add_extra(StepExecuteOnlyOncePerMatrix())
+        .add_extra(
+            StepExecuteOnlyOn(
+                os=OS.WINDOWS,
+            )
+        )
+    )
+
     p.add_step(
         StepWinPSCommand(
             name="init repo (Windows)",
             description="init repo",
-            cmd=["cd workspace/qt6", "./init-repository.bat"],
+            cmd=["cd workspace/" + repo_name, "./init-repository.bat"],
             dry_run=dry_run,
         )
         .add_extra(StepExecuteOnlyOncePerMatrix())
@@ -286,20 +375,28 @@ def create_orchestrator() -> OptionalOrchestratorWithReport:
                 "Set-StrictMode -Version Latest",
                 "$ErrorActionPreference = 'Stop'",
                 "",
+                "# Enable long path support (Windows 10+)",
+                "try {",
+                '    New-ItemProperty -Path "HKLM:\\SYSTEM\\CurrentControlSet\\Control\\FileSystem\\" -Name "LongPathsEnabled" -Value 1 -Force | Out-Null',
+                "} catch {",
+                '    Write-Host "Unable to enable long paths, continuing..."',
+                "}",
+                "",
                 "cd workspace",
                 "",
-                "if (!(Test-Path \".venv\")) {",
+                'if (!(Test-Path ".venv")) {',
                 "    python -m venv .venv",
                 "}",
                 "",
-                "& \".\\.venv\\Scripts\\Activate.ps1\"",
+                '& ".\\.venv\\Scripts\\Activate.ps1"',
                 "",
                 "python -m pip install --upgrade pip",
                 "",
                 "pip install html5lib",
                 "",
                 "$WORKSPACE_ROOT = Get-Location",
-                '$FOLDER_NAME = "$CS_DIR_FROM_MATRIX"',
+                '$BUILD_FOLDER_NAME = "build-$CS_MATRIX_EXEC_ID"',
+                '$INSTALL_FOLDER_NAME = "$CS_DIR_FROM_MATRIX"',
                 '$GENERATOR_TYPE = "$CS_GENERATOR_TYPE"',
                 '$GENERATOR_TYPE_SINGLECONFIG = "$CS_GENERATOR_TYPE_SINGLECONFIG"',
                 '$GENERATOR_TYPE_MULTICONFIG = "$CS_GENERATOR_TYPE_MULTICONFIG"',
@@ -308,7 +405,9 @@ def create_orchestrator() -> OptionalOrchestratorWithReport:
                 '$CPP_COMPILER = "$CS_CPP_COMPILER"',
                 '$TOOLSET="$CS_TOOLSET"',
                 "",
-                'New-Item -ItemType Directory -Force -Path "$WORKSPACE_ROOT/install/$FOLDER_NAME/qt6" | Out-Null',
+                'New-Item -ItemType Directory -Force -Path "$WORKSPACE_ROOT/install/$INSTALL_FOLDER_NAME/'
+                + repo_name
+                + '" | Out-Null',
                 "",
                 "$CMAKE_ARGS = @()",
                 '$CMAKE_ARGS += "-DCMAKE_RC_COMPILER_INIT=rc.exe"',
@@ -320,36 +419,76 @@ def create_orchestrator() -> OptionalOrchestratorWithReport:
                 "",
                 "if ($GENERATOR_TYPE -eq $GENERATOR_TYPE_SINGLECONFIG) {",
                 "",
-                '    $DEBUG_DIR = "$WORKSPACE_ROOT/build/$FOLDER_NAME/qt6/debug"',
+                '    $DEBUG_DIR = "$WORKSPACE_ROOT/build/$BUILD_FOLDER_NAME/'
+                + repo_name
+                + '/debug"',
                 "    New-Item -ItemType Directory -Force -Path $DEBUG_DIR | Out-Null",
                 "    Set-Location $DEBUG_DIR",
                 "",
-                '    & "$WORKSPACE_ROOT/qt6/configure.bat" -no-pch -debug -cmake-generator $GENERATOR_CMAKE @CMAKE_ARGS -prefix "$WORKSPACE_ROOT/install/$FOLDER_NAME/qt6"',
-                "    cmake --build . --parallel 4",
-                "    cmake --install .",
+                '    & "$WORKSPACE_ROOT/'
+                + repo_name
+                + '/configure.bat" -no-pch -debug -cmake-generator $GENERATOR_CMAKE @CMAKE_ARGS -prefix "$WORKSPACE_ROOT/install/$INSTALL_FOLDER_NAME/'
+                + repo_name
+                + '"',
+                "    if ($LASTEXITCODE) { exit $LASTEXITCODE }",
                 "",
-                '    $RELEASE_DIR = "$WORKSPACE_ROOT/build/$FOLDER_NAME/qt6/release"',
+                "    cmake --build . --parallel 4",
+                "    if ($LASTEXITCODE) { exit $LASTEXITCODE }",
+                "",
+                "    cmake --install .",
+                "    if ($LASTEXITCODE) { exit $LASTEXITCODE }",
+                "",
+                "",
+                '    $RELEASE_DIR = "$WORKSPACE_ROOT/build/$BUILD_FOLDER_NAME/'
+                + repo_name
+                + '/release"',
                 "    New-Item -ItemType Directory -Force -Path $RELEASE_DIR | Out-Null",
                 "    Set-Location $RELEASE_DIR",
                 "",
-                '    & "$WORKSPACE_ROOT/qt6/configure.bat" -no-pch -release -cmake-generator $GENERATOR_CMAKE @CMAKE_ARGS -prefix "$WORKSPACE_ROOT/install/$FOLDER_NAME/qt6"',
+                '    & "$WORKSPACE_ROOT/'
+                + repo_name
+                + '/configure.bat" -no-pch -release -cmake-generator $GENERATOR_CMAKE @CMAKE_ARGS -prefix "$WORKSPACE_ROOT/install/$INSTALL_FOLDER_NAME/'
+                + repo_name
+                + '"',
+                "    if ($LASTEXITCODE) { exit $LASTEXITCODE }",
+                "",
                 "    cmake --build . --parallel 4",
+                "    if ($LASTEXITCODE) { exit $LASTEXITCODE }",
+                "",
                 "    cmake --install .",
+                "    if ($LASTEXITCODE) { exit $LASTEXITCODE }",
+                "",
                 "",
                 "}",
                 "elseif ($GENERATOR_TYPE -eq $GENERATOR_TYPE_MULTICONFIG) {",
                 "",
-                '    $BUILD_DIR = "$WORKSPACE_ROOT/build/$FOLDER_NAME/qt6"',
+                '    $BUILD_DIR = "$WORKSPACE_ROOT/build/$BUILD_FOLDER_NAME/'
+                + repo_name
+                + '"',
                 "    New-Item -ItemType Directory -Force -Path $BUILD_DIR | Out-Null",
                 "    Set-Location $BUILD_DIR",
                 "",
-                '    & "$WORKSPACE_ROOT/qt6/configure.bat" -no-pch -cmake-generator $GENERATOR_CMAKE @CMAKE_ARGS -prefix "$WORKSPACE_ROOT/install/$FOLDER_NAME/qt6"',
+                '    & "$WORKSPACE_ROOT/'
+                + repo_name
+                + '/configure.bat" -no-pch -cmake-generator $GENERATOR_CMAKE @CMAKE_ARGS -prefix "$WORKSPACE_ROOT/install/$INSTALL_FOLDER_NAME/'
+                + repo_name
+                + '"',
+                "    if ($LASTEXITCODE) { exit $LASTEXITCODE }",
+                "",
                 "",
                 "    cmake --build . --parallel 4 --config Debug",
+                "    if ($LASTEXITCODE) { exit $LASTEXITCODE }",
+                "",
                 "    cmake --build . --parallel 4 --config Release",
+                "    if ($LASTEXITCODE) { exit $LASTEXITCODE }",
+                "",
                 "",
                 "    cmake --install . --config Debug",
+                "    if ($LASTEXITCODE) { exit $LASTEXITCODE }",
+                "",
                 "    cmake --install . --config Release",
+                "",
+                "    if ($LASTEXITCODE) { exit $LASTEXITCODE }",
                 "",
                 "}",
                 "else {",
@@ -366,6 +505,17 @@ def create_orchestrator() -> OptionalOrchestratorWithReport:
     )
 
     p = o.create_phase(f"Create and Upload Artifacts")
+
+    p.add_step(
+        StepGetVersionsFromCMakeConfigPackageVersion(
+            name="Get Versions",
+            description="Get Versions for all libs",
+            repos_auto_search_list=[repo_name],
+            base_install_dir=base_install_dir,
+            id="versions",
+            output_dict_name="packages",
+        )
+    )
 
     p.add_step(
         StepCreateArchives(
