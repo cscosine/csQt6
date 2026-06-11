@@ -278,7 +278,7 @@ jobs:
               mkdir -p "build/${BUILD_FOLDER_NAME}/qt6/release"
               cd "build/${BUILD_FOLDER_NAME}/qt6/release"
           
-              "${WORKSPACE_ROOT}/qt6/configure" -no-pch -release -cmake-generator "${GENERATOR_CMAKE}" "${CMAKE_ARGS[@]}" -prefix "${WORKSPACE_ROOT}/install/${INSTALL_FOLDER_NAME}/qt6"
+              "${WORKSPACE_ROOT}/qt6/configure" -no-pch -skip qtwebengine -release -cmake-generator "${GENERATOR_CMAKE}" "${CMAKE_ARGS[@]}" -prefix "${WORKSPACE_ROOT}/install/${INSTALL_FOLDER_NAME}/qt6"
           
               cmake --build .
           
@@ -289,7 +289,7 @@ jobs:
               mkdir -p "build/${BUILD_FOLDER_NAME}/qt6"
               cd "build/${BUILD_FOLDER_NAME}/qt6"
           
-              "${WORKSPACE_ROOT}/qt6/configure" -no-pch  -cmake-generator "${GENERATOR_CMAKE}" "${CMAKE_ARGS[@]}" -prefix "${WORKSPACE_ROOT}/install/${INSTALL_FOLDER_NAME}/qt6"
+              "${WORKSPACE_ROOT}/qt6/configure" -no-pch -skip qtwebengine  -cmake-generator "${GENERATOR_CMAKE}" "${CMAKE_ARGS[@]}" -prefix "${WORKSPACE_ROOT}/install/${INSTALL_FOLDER_NAME}/qt6"
           
               cmake --build . --config Release
           
@@ -396,7 +396,7 @@ jobs:
               New-Item -ItemType Directory -Force -Path $RELEASE_DIR | Out-Null
               Set-Location $RELEASE_DIR
           
-              & "$WORKSPACE_ROOT/qt6/configure.bat" -no-pch -release -cmake-generator $GENERATOR_CMAKE @CMAKE_ARGS -prefix "$WORKSPACE_ROOT/install/$INSTALL_FOLDER_NAME/qt6"
+              & "$WORKSPACE_ROOT/qt6/configure.bat" -no-pch -skip qtwebengine -release -cmake-generator $GENERATOR_CMAKE @CMAKE_ARGS -prefix "$WORKSPACE_ROOT/install/$INSTALL_FOLDER_NAME/qt6"
               if ($LASTEXITCODE) { exit $LASTEXITCODE }
           
               cmake --build . 
@@ -413,7 +413,7 @@ jobs:
               New-Item -ItemType Directory -Force -Path $BUILD_DIR | Out-Null
               Set-Location $BUILD_DIR
           
-              & "$WORKSPACE_ROOT/qt6/configure.bat" -no-pch -cmake-generator $GENERATOR_CMAKE @CMAKE_ARGS -prefix "$WORKSPACE_ROOT/install/$INSTALL_FOLDER_NAME/qt6"
+              & "$WORKSPACE_ROOT/qt6/configure.bat" -no-pch -skip qtwebengine -cmake-generator $GENERATOR_CMAKE @CMAKE_ARGS -prefix "$WORKSPACE_ROOT/install/$INSTALL_FOLDER_NAME/qt6"
               if ($LASTEXITCODE) { exit $LASTEXITCODE }
           
           

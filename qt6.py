@@ -246,7 +246,7 @@ def create_orchestrator() -> OptionalOrchestratorWithReport:
                 "",
                 '    "${WORKSPACE_ROOT}/'
                 + repo_name
-                + '/configure" -no-pch -release -cmake-generator "${GENERATOR_CMAKE}" "${CMAKE_ARGS[@]}" -prefix "${WORKSPACE_ROOT}/install/${INSTALL_FOLDER_NAME}/'
+                + '/configure" -no-pch -skip qtwebengine -release -cmake-generator "${GENERATOR_CMAKE}" "${CMAKE_ARGS[@]}" -prefix "${WORKSPACE_ROOT}/install/${INSTALL_FOLDER_NAME}/'
                 + repo_name
                 + '"',
                 "",
@@ -261,7 +261,7 @@ def create_orchestrator() -> OptionalOrchestratorWithReport:
                 "",
                 '    "${WORKSPACE_ROOT}/'
                 + repo_name
-                + '/configure" -no-pch  -cmake-generator "${GENERATOR_CMAKE}" "${CMAKE_ARGS[@]}" -prefix "${WORKSPACE_ROOT}/install/${INSTALL_FOLDER_NAME}/'
+                + '/configure" -no-pch -skip qtwebengine  -cmake-generator "${GENERATOR_CMAKE}" "${CMAKE_ARGS[@]}" -prefix "${WORKSPACE_ROOT}/install/${INSTALL_FOLDER_NAME}/'
                 + repo_name
                 + '"',
                 "",
@@ -419,7 +419,7 @@ def create_orchestrator() -> OptionalOrchestratorWithReport:
                 "",
                 '    & "$WORKSPACE_ROOT/'
                 + repo_name
-                + '/configure.bat" -no-pch -release -cmake-generator $GENERATOR_CMAKE @CMAKE_ARGS -prefix "$WORKSPACE_ROOT/install/$INSTALL_FOLDER_NAME/'
+                + '/configure.bat" -no-pch -skip qtwebengine -release -cmake-generator $GENERATOR_CMAKE @CMAKE_ARGS -prefix "$WORKSPACE_ROOT/install/$INSTALL_FOLDER_NAME/'
                 + repo_name
                 + '"',
                 "    if ($LASTEXITCODE) { exit $LASTEXITCODE }",
@@ -442,7 +442,7 @@ def create_orchestrator() -> OptionalOrchestratorWithReport:
                 "",
                 '    & "$WORKSPACE_ROOT/'
                 + repo_name
-                + '/configure.bat" -no-pch -cmake-generator $GENERATOR_CMAKE @CMAKE_ARGS -prefix "$WORKSPACE_ROOT/install/$INSTALL_FOLDER_NAME/'
+                + '/configure.bat" -no-pch -skip qtwebengine -cmake-generator $GENERATOR_CMAKE @CMAKE_ARGS -prefix "$WORKSPACE_ROOT/install/$INSTALL_FOLDER_NAME/'
                 + repo_name
                 + '"',
                 "    if ($LASTEXITCODE) { exit $LASTEXITCODE }",
