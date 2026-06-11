@@ -256,7 +256,6 @@ jobs:
           GENERATOR_CMAKE="${{ matrix.generator_cmake }}"
           C_COMPILER="${{ matrix.c_compiler }}"
           CPP_COMPILER="${{ matrix.cpp_compiler }}"
-          TOOLSET="${{ matrix.toolset }}"
           
           : "${INSTALL_FOLDER_NAME:?missing INSTALL_FOLDER_NAME}"
           : "${BUILD_FOLDER_NAME:?missing BUILD_FOLDER_NAME}"
@@ -269,20 +268,10 @@ jobs:
           
           [[ -n "$C_COMPILER"   ]] && CMAKE_ARGS+=("-DCMAKE_C_COMPILER=$C_COMPILER")
           [[ -n "$CPP_COMPILER" ]] && CMAKE_ARGS+=("-DCMAKE_CXX_COMPILER=$CPP_COMPILER")
-          [[ -n "$TOOLSET"      ]] && CMAKE_ARGS+=("-DCMAKE_GENERATOR_TOOLSET=$TOOLSET")
           
           mkdir -p "install/${INSTALL_FOLDER_NAME}/qt6"
           
           if [[ "${GENERATOR_TYPE}" == "${GENERATOR_TYPE_SINGLECONFIG}" ]]; then
-              mkdir -p "build/${BUILD_FOLDER_NAME}/qt6/debug"
-              cd "build/${BUILD_FOLDER_NAME}/qt6/debug"
-          
-              "${WORKSPACE_ROOT}/qt6/configure" -no-pch -debug -cmake-generator "${GENERATOR_CMAKE}" "${CMAKE_ARGS[@]}" -prefix "${WORKSPACE_ROOT}/install/${INSTALL_FOLDER_NAME}/qt6"
-          
-              cmake --build . --parallel 4
-          
-              cmake --install .
-          
           
               cd "${WORKSPACE_ROOT}"
           
@@ -296,16 +285,13 @@ jobs:
               cmake --install .
           
           elif [[ "${GENERATOR_TYPE}" == "${GENERATOR_TYPE_MULTICONFIG}" ]]; then
+          
               mkdir -p "build/${BUILD_FOLDER_NAME}/qt6"
               cd "build/${BUILD_FOLDER_NAME}/qt6"
           
               "${WORKSPACE_ROOT}/qt6/configure" -no-pch  -cmake-generator "${GENERATOR_CMAKE}" "${CMAKE_ARGS[@]}" -prefix "${WORKSPACE_ROOT}/install/${INSTALL_FOLDER_NAME}/qt6"
           
-              cmake --build . --config Debug
-          
               cmake --build . --config Release
-          
-              cmake --install . --config Debug
           
               cmake --install . --config Release
           
@@ -390,30 +376,21 @@ jobs:
           
           New-Item -ItemType Directory -Force -Path "$WORKSPACE_ROOT/install/$INSTALL_FOLDER_NAME/qt6" | Out-Null
           
+          if ($TOOLSET -eq "ClangCL") {
+              if (-not $C_COMPILER) {
+                  $C_COMPILER = "clang-cl.exe"
+              }
+          
+              if (-not $CPP_COMPILER) {
+                  $CPP_COMPILER = "clang-cl.exe"
+              }
+          }
+          
           $CMAKE_ARGS = @()
-          $CMAKE_ARGS += "-DCMAKE_RC_COMPILER_INIT=rc.exe"
-          $CMAKE_ARGS += "-DCMAKE_RC_COMPILER=rc.exe"
-          $CMAKE_ARGS += "-DCMAKE_RC_USE_RESPONSE_FILE=ON"
           if ($C_COMPILER) { $CMAKE_ARGS += "-DCMAKE_C_COMPILER=$C_COMPILER" }
           if ($CPP_COMPILER) { $CMAKE_ARGS += "-DCMAKE_CXX_COMPILER=$CPP_COMPILER" }
-          if ($TOOLSET) { $CMAKE_ARGS += "-DCMAKE_GENERATOR_TOOLSET=$TOOLSET" }
-          $CMAKE_ARGS += '-DCMAKE_CXX_FLAGS="/D_SILENCE_EXPERIMENTAL_COROUTINE_DEPRECATION_WARNINGS"'
           
           if ($GENERATOR_TYPE -eq $GENERATOR_TYPE_SINGLECONFIG) {
-          
-              $DEBUG_DIR = "$WORKSPACE_ROOT/build/$BUILD_FOLDER_NAME/qt6/debug"
-              New-Item -ItemType Directory -Force -Path $DEBUG_DIR | Out-Null
-              Set-Location $DEBUG_DIR
-          
-              & "$WORKSPACE_ROOT/qt6/configure.bat" -no-pch -debug -cmake-generator $GENERATOR_CMAKE @CMAKE_ARGS -prefix "$WORKSPACE_ROOT/install/$INSTALL_FOLDER_NAME/qt6"
-              if ($LASTEXITCODE) { exit $LASTEXITCODE }
-          
-              cmake --build . --parallel 4
-              if ($LASTEXITCODE) { exit $LASTEXITCODE }
-          
-              cmake --install .
-              if ($LASTEXITCODE) { exit $LASTEXITCODE }
-          
           
               $RELEASE_DIR = "$WORKSPACE_ROOT/build/$BUILD_FOLDER_NAME/qt6/release"
               New-Item -ItemType Directory -Force -Path $RELEASE_DIR | Out-Null
@@ -422,7 +399,7 @@ jobs:
               & "$WORKSPACE_ROOT/qt6/configure.bat" -no-pch -release -cmake-generator $GENERATOR_CMAKE @CMAKE_ARGS -prefix "$WORKSPACE_ROOT/install/$INSTALL_FOLDER_NAME/qt6"
               if ($LASTEXITCODE) { exit $LASTEXITCODE }
           
-              cmake --build . --parallel 4
+              cmake --build . 
               if ($LASTEXITCODE) { exit $LASTEXITCODE }
           
               cmake --install .
@@ -440,18 +417,11 @@ jobs:
               if ($LASTEXITCODE) { exit $LASTEXITCODE }
           
           
-              cmake --build . --parallel 4 --config Debug
+              cmake --build . -config Release
               if ($LASTEXITCODE) { exit $LASTEXITCODE }
           
-              cmake --build . --parallel 4 --config Release
-              if ($LASTEXITCODE) { exit $LASTEXITCODE }
-          
-          
-              cmake --install . --config Debug
-              if ($LASTEXITCODE) { exit $LASTEXITCODE }
           
               cmake --install . --config Release
-          
               if ($LASTEXITCODE) { exit $LASTEXITCODE }
           
           }
