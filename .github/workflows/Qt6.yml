@@ -61,19 +61,6 @@ jobs:
             runner: ubuntu-22.04
           - execution_id: 1
             os: linux
-            os_version: ubuntu22.04
-            architecture: x64
-            architecture_variant: generic
-            compiler: clang
-            c_compiler: clang
-            cpp_compiler: clang++
-            compiler_version: default
-            generator: ninja
-            generator_type: singleconfig
-            generator_cmake: Ninja
-            runner: ubuntu-22.04
-          - execution_id: 2
-            os: linux
             os_version: ubuntu24.04
             architecture: x64
             architecture_variant: generic
@@ -85,20 +72,7 @@ jobs:
             generator_type: singleconfig
             generator_cmake: Ninja
             runner: ubuntu-24.04
-          - execution_id: 3
-            os: linux
-            os_version: ubuntu24.04
-            architecture: x64
-            architecture_variant: generic
-            compiler: clang
-            c_compiler: clang
-            cpp_compiler: clang++
-            compiler_version: default
-            generator: ninja
-            generator_type: singleconfig
-            generator_cmake: Ninja
-            runner: ubuntu-24.04
-          - execution_id: 4
+          - execution_id: 2
             os: windows
             os_version: v10
             architecture: x64
@@ -109,41 +83,6 @@ jobs:
             generator_type: singleconfig
             generator_cmake: Ninja
             runner: windows-2022
-          - execution_id: 5
-            os: windows
-            os_version: v10
-            architecture: x64
-            architecture_variant: generic
-            compiler: msvcclang
-            toolset: ClangCL
-            compiler_version: msvc_2022_17
-            generator: ninja
-            generator_type: singleconfig
-            generator_cmake: Ninja
-            runner: windows-2022
-          - execution_id: 6
-            os: windows
-            os_version: v10
-            architecture: x64
-            architecture_variant: generic
-            compiler: msvc
-            compiler_version: msvc_2026_18
-            generator: ninja
-            generator_type: singleconfig
-            generator_cmake: Ninja
-            runner: windows-2025-vs2026
-          - execution_id: 7
-            os: windows
-            os_version: v10
-            architecture: x64
-            architecture_variant: generic
-            compiler: msvcclang
-            toolset: ClangCL
-            compiler_version: msvc_2026_18
-            generator: ninja
-            generator_type: singleconfig
-            generator_cmake: Ninja
-            runner: windows-2025-vs2026
 
     steps:
       - name: qt6
@@ -188,7 +127,6 @@ jobs:
             libxkbcommon-x11-dev
             libopenjp2-7
             libxss-dev
-            libxcb-render-util0-dev
             libudev-dev
             libwayland-dev
             libnss3-dev
@@ -217,6 +155,8 @@ jobs:
         if: ${{ matrix.os == 'linux' && startsWith(matrix.os_version, 'ubuntu') }}
         shell: bash
         run: |
+          set -euo pipefail
+          
           # Show available space
           df -h
           
@@ -236,69 +176,66 @@ jobs:
         if: ${{ matrix.os == 'linux' && startsWith(matrix.os_version, 'ubuntu') }}
         shell: bash
         run: |
+          set -euo pipefail
+          
           cd workspace/qt6
           ./init-repository
 
-      - name: Run command configure/build/install (Linux-Ubuntu)
+      - name: Run command Configure (Linux-Ubuntu)
         if: ${{ matrix.os == 'linux' && startsWith(matrix.os_version, 'ubuntu') }}
         shell: bash
         run: |
           set -euo pipefail
           
-          cd workspace/
+          ROOT_FOLDER=$(pwd)
           
-          WORKSPACE_ROOT=$(pwd)
-          INSTALL_FOLDER_NAME="csv1-${{ matrix.os }}-${{ matrix.os_version }}-${{ matrix.architecture }}-${{ matrix.architecture_variant }}-${{ matrix.compiler }}-${{ matrix.compiler_version }}-${{ matrix.generator }}"
-          BUILD_FOLDER_NAME="build-${{ matrix.execution_id }}"
-          GENERATOR_TYPE="${{ matrix.generator_type }}"
-          GENERATOR_TYPE_SINGLECONFIG="singleconfig"
-          GENERATOR_TYPE_MULTICONFIG="multiconfig"
-          GENERATOR_CMAKE="${{ matrix.generator_cmake }}"
-          C_COMPILER="${{ matrix.c_compiler }}"
-          CPP_COMPILER="${{ matrix.cpp_compiler }}"
+          FOLDER_NAME="csv1-${{ matrix.os }}-${{ matrix.os_version }}-${{ matrix.architecture }}-${{ matrix.architecture_variant }}-${{ matrix.compiler }}-${{ matrix.compiler_version }}-${{ matrix.generator }}"
+          : "${FOLDER_NAME:?missing FOLDER_NAME}"
           
-          : "${INSTALL_FOLDER_NAME:?missing INSTALL_FOLDER_NAME}"
-          : "${BUILD_FOLDER_NAME:?missing BUILD_FOLDER_NAME}"
-          : "${GENERATOR_TYPE:?missing GENERATOR_TYPE}"
-          : "${GENERATOR_TYPE_SINGLECONFIG:?missing GENERATOR_TYPE_SINGLECONFIG}"
-          : "${GENERATOR_TYPE_MULTICONFIG:?missing GENERATOR_TYPE_MULTICONFIG}"
-          : "${GENERATOR_CMAKE:?missing GENERATOR_CMAKE}"
+          REPO_FOLDER="${ROOT_FOLDER}/workspace/qt6"
+          BUILD_FOLDER="${ROOT_FOLDER}/workspace/build/${FOLDER_NAME}/qt6/release"
+          INSTALL_FOLDER="${ROOT_FOLDER}/workspace/install/${FOLDER_NAME}/qt6"
           
-          CMAKE_ARGS=()
+          mkdir -p "${INSTALL_FOLDER}"
+          mkdir -p "${BUILD_FOLDER}"
           
-          [[ -n "$C_COMPILER"   ]] && CMAKE_ARGS+=("-DCMAKE_C_COMPILER=$C_COMPILER")
-          [[ -n "$CPP_COMPILER" ]] && CMAKE_ARGS+=("-DCMAKE_CXX_COMPILER=$CPP_COMPILER")
+          cd "${BUILD_FOLDER}"
           
-          mkdir -p "install/${INSTALL_FOLDER_NAME}/qt6"
+          "${REPO_FOLDER}/configure" -no-pch -skip qtwebengine -release -prefix "${INSTALL_FOLDER}"
+
+      - name: Run command Build (Linux-Ubuntu)
+        if: ${{ matrix.os == 'linux' && startsWith(matrix.os_version, 'ubuntu') }}
+        shell: bash
+        run: |
+          set -euo pipefail
           
-          if [[ "${GENERATOR_TYPE}" == "${GENERATOR_TYPE_SINGLECONFIG}" ]]; then
+          ROOT_FOLDER=$(pwd)
           
-              cd "${WORKSPACE_ROOT}"
+          FOLDER_NAME="csv1-${{ matrix.os }}-${{ matrix.os_version }}-${{ matrix.architecture }}-${{ matrix.architecture_variant }}-${{ matrix.compiler }}-${{ matrix.compiler_version }}-${{ matrix.generator }}"
+          : "${FOLDER_NAME:?missing FOLDER_NAME}"
           
-              mkdir -p "build/${BUILD_FOLDER_NAME}/qt6/release"
-              cd "build/${BUILD_FOLDER_NAME}/qt6/release"
+          BUILD_FOLDER="${ROOT_FOLDER}/workspace/build/${FOLDER_NAME}/qt6/release"
           
-              "${WORKSPACE_ROOT}/qt6/configure" -no-pch -skip qtwebengine -release -cmake-generator "${GENERATOR_CMAKE}" "${CMAKE_ARGS[@]}" -prefix "${WORKSPACE_ROOT}/install/${INSTALL_FOLDER_NAME}/qt6"
+          cd "${BUILD_FOLDER}"
           
-              cmake --build .
+          cmake --build . --parallel 4
+
+      - name: Run command Install (Linux-Ubuntu)
+        if: ${{ matrix.os == 'linux' && startsWith(matrix.os_version, 'ubuntu') }}
+        shell: bash
+        run: |
+          set -euo pipefail
           
-              cmake --install .
+          ROOT_FOLDER=$(pwd)
           
-          elif [[ "${GENERATOR_TYPE}" == "${GENERATOR_TYPE_MULTICONFIG}" ]]; then
+          FOLDER_NAME="csv1-${{ matrix.os }}-${{ matrix.os_version }}-${{ matrix.architecture }}-${{ matrix.architecture_variant }}-${{ matrix.compiler }}-${{ matrix.compiler_version }}-${{ matrix.generator }}"
+          : "${FOLDER_NAME:?missing FOLDER_NAME}"
           
-              mkdir -p "build/${BUILD_FOLDER_NAME}/qt6"
-              cd "build/${BUILD_FOLDER_NAME}/qt6"
+          BUILD_FOLDER="${ROOT_FOLDER}/workspace/build/${FOLDER_NAME}/qt6/release"
           
-              "${WORKSPACE_ROOT}/qt6/configure" -no-pch -skip qtwebengine  -cmake-generator "${GENERATOR_CMAKE}" "${CMAKE_ARGS[@]}" -prefix "${WORKSPACE_ROOT}/install/${INSTALL_FOLDER_NAME}/qt6"
+          cd "${BUILD_FOLDER}"
           
-              cmake --build . --config Release
-          
-              cmake --install . --config Release
-          
-          else
-              echo "Unknown generator_type: ${GENERATOR_TYPE}"
-              exit 1
-          fi
+          cmake --install .
 
       - name: Setup MSVC
         uses: TheMrMilchmann/setup-msvc-dev@v4
@@ -334,101 +271,79 @@ jobs:
         if: ${{ matrix.os == 'windows' }}
         shell: powershell
         run: |
+          Set-StrictMode -Version Latest
+          $ErrorActionPreference = 'Stop'
+          
           cd workspace/qt6
           ./init-repository.bat
 
-      - name: Run command configure/build/install (Windows)
+      - name: Run command Configure (Windows)
         if: ${{ matrix.os == 'windows' }}
         shell: powershell
         run: |
           Set-StrictMode -Version Latest
           $ErrorActionPreference = 'Stop'
           
-          # Enable long path support (Windows 10+)
-          try {
-              New-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\FileSystem\" -Name "LongPathsEnabled" -Value 1 -Force | Out-Null
-          } catch {
-              Write-Host "Unable to enable long paths, continuing..."
-          }
-          
-          cd workspace
-          
           if (!(Test-Path ".venv")) {
               python -m venv .venv
           }
-          
           & ".\.venv\Scripts\Activate.ps1"
-          
           python -m pip install --upgrade pip
-          
           pip install html5lib
           
-          $WORKSPACE_ROOT = Get-Location
-          $BUILD_FOLDER_NAME = "build-${{ matrix.execution_id }}"
-          $INSTALL_FOLDER_NAME = "csv1-${{ matrix.os }}-${{ matrix.os_version }}-${{ matrix.architecture }}-${{ matrix.architecture_variant }}-${{ matrix.compiler }}-${{ matrix.compiler_version }}-${{ matrix.generator }}"
-          $GENERATOR_TYPE = "${{ matrix.generator_type }}"
-          $GENERATOR_TYPE_SINGLECONFIG = "singleconfig"
-          $GENERATOR_TYPE_MULTICONFIG = "multiconfig"
-          $GENERATOR_CMAKE = "${{ matrix.generator_cmake }}"
-          $C_COMPILER = "${{ matrix.c_compiler }}"
-          $CPP_COMPILER = "${{ matrix.cpp_compiler }}"
-          $TOOLSET="${{ matrix.toolset }}"
+          $ROOT_FOLDER = Get-Location
           
-          New-Item -ItemType Directory -Force -Path "$WORKSPACE_ROOT/install/$INSTALL_FOLDER_NAME/qt6" | Out-Null
+          $FOLDER_NAME = "csv1-${{ matrix.os }}-${{ matrix.os_version }}-${{ matrix.architecture }}-${{ matrix.architecture_variant }}-${{ matrix.compiler }}-${{ matrix.compiler_version }}-${{ matrix.generator }}"
           
-          if ($TOOLSET -eq "ClangCL") {
-              if (-not $C_COMPILER) {
-                  $C_COMPILER = "clang-cl.exe"
-              }
+          $REPO_FOLDER="$ROOT_FOLDER/workspace/qt6"
+          $BUILD_FOLDER="$ROOT_FOLDER/workspace/build/$FOLDER_NAME/qt6/release"
+          $INSTALL_FOLDER="$ROOT_FOLDER/workspace/install/$FOLDER_NAME/qt6"
           
-              if (-not $CPP_COMPILER) {
-                  $CPP_COMPILER = "clang-cl.exe"
-              }
-          }
+          New-Item -ItemType Directory -Force -Path "$INSTALL_FOLDER" | Out-Null
+          New-Item -ItemType Directory -Force -Path "$BUILD_FOLDER" | Out-Null
           
-          $CMAKE_ARGS = @()
-          if ($C_COMPILER) { $CMAKE_ARGS += "-DCMAKE_C_COMPILER=$C_COMPILER" }
-          if ($CPP_COMPILER) { $CMAKE_ARGS += "-DCMAKE_CXX_COMPILER=$CPP_COMPILER" }
+          Set-Location $BUILD_FOLDER
           
-          if ($GENERATOR_TYPE -eq $GENERATOR_TYPE_SINGLECONFIG) {
+          & "$REPO_FOLDER/configure.bat" -no-pch -skip qtwebengine -release -prefix "$INSTALL_FOLDER"
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+
+      - name: Run command Build (Windows)
+        if: ${{ matrix.os == 'windows' }}
+        shell: powershell
+        run: |
+          Set-StrictMode -Version Latest
+          $ErrorActionPreference = 'Stop'
           
-              $RELEASE_DIR = "$WORKSPACE_ROOT/build/$BUILD_FOLDER_NAME/qt6/release"
-              New-Item -ItemType Directory -Force -Path $RELEASE_DIR | Out-Null
-              Set-Location $RELEASE_DIR
+          $ROOT_FOLDER = Get-Location
           
-              & "$WORKSPACE_ROOT/qt6/configure.bat" -no-pch -skip qtwebengine -release -cmake-generator $GENERATOR_CMAKE @CMAKE_ARGS -prefix "$WORKSPACE_ROOT/install/$INSTALL_FOLDER_NAME/qt6"
-              if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          $FOLDER_NAME = "csv1-${{ matrix.os }}-${{ matrix.os_version }}-${{ matrix.architecture }}-${{ matrix.architecture_variant }}-${{ matrix.compiler }}-${{ matrix.compiler_version }}-${{ matrix.generator }}"
           
-              cmake --build . 
-              if ($LASTEXITCODE) { exit $LASTEXITCODE }
-          
-              cmake --install .
-              if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          $BUILD_FOLDER="$ROOT_FOLDER/workspace/build/$FOLDER_NAME/qt6/release"
           
           
-          }
-          elseif ($GENERATOR_TYPE -eq $GENERATOR_TYPE_MULTICONFIG) {
+          Set-Location $BUILD_FOLDER
           
-              $BUILD_DIR = "$WORKSPACE_ROOT/build/$BUILD_FOLDER_NAME/qt6"
-              New-Item -ItemType Directory -Force -Path $BUILD_DIR | Out-Null
-              Set-Location $BUILD_DIR
+          cmake --build .  --parallel 4
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+
+      - name: Run command Install (Windows)
+        if: ${{ matrix.os == 'windows' }}
+        shell: powershell
+        run: |
+          Set-StrictMode -Version Latest
+          $ErrorActionPreference = 'Stop'
           
-              & "$WORKSPACE_ROOT/qt6/configure.bat" -no-pch -skip qtwebengine -cmake-generator $GENERATOR_CMAKE @CMAKE_ARGS -prefix "$WORKSPACE_ROOT/install/$INSTALL_FOLDER_NAME/qt6"
-              if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          $ROOT_FOLDER = Get-Location
+          
+          $FOLDER_NAME = "csv1-${{ matrix.os }}-${{ matrix.os_version }}-${{ matrix.architecture }}-${{ matrix.architecture_variant }}-${{ matrix.compiler }}-${{ matrix.compiler_version }}-${{ matrix.generator }}"
+          
+          $BUILD_FOLDER="$ROOT_FOLDER/workspace/build/$FOLDER_NAME/qt6/release"
           
           
-              cmake --build . -config Release
-              if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          Set-Location $BUILD_FOLDER
           
-          
-              cmake --install . --config Release
-              if ($LASTEXITCODE) { exit $LASTEXITCODE }
-          
-          }
-          else {
-              Write-Host "Unknown generator_type: $GENERATOR_TYPE"
-              exit 1
-          }
+          cmake --install . 
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
 
       - name: Get Versions
         id: versions
@@ -488,6 +403,9 @@ jobs:
           }
           
           result = []
+          
+          result.append({'name': 'qt6','version': 'v6.11.1'})
+          
           for name, filename in files.items():
             v_or_err = grep_package_version(filename=filename)
             if v_or_err[0] is not None:
@@ -499,7 +417,6 @@ jobs:
                 sys.exit('ERROR: unexpected behavior of grep_package_version processing {name} at {filename}')
           
           repos_auto_search_list = [
-              "qt6",
           ]
           
           for name in repos_auto_search_list:

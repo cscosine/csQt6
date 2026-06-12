@@ -4,6 +4,7 @@ import sys
 from pathlib import Path
 from typing import Sequence, TypeAlias
 
+from csorchestrator.context.context_compiler_generator import Compiler, ContextCompilerGenerator
 from csorchestrator.core.report import Report
 from csorchestrator.context.context_os_architecture import OS, UBUNTU_STRING_PREFIX
 from csorchestrator.step.step_utils import StepExecuteOnlyOn
@@ -41,7 +42,7 @@ from csorchestrator.ci.github.github_workflow_config import (
 )
 from csorchestrator.step.step_get_versions_from_cmake_config_package_version import (
     StepGetVersionsFromCMakeConfigPackageVersion,
-    CMakeConfigPackageVersionGrep,
+    CMakeConfigPackageVersion,
 )
 from csorchestrator.step.step_create_archives import StepCreateArchives
 from csorchestrator.step.step_upload_artifacts import StepUploadArtifacts
@@ -64,6 +65,19 @@ def create_orchestrator() -> OptionalOrchestratorWithReport:
         use_ninja=True,
         use_ninjamulti=False,
     )
+
+    # strip non used matrix configs
+    new_list = []
+    for entry in o.execution_matrix.os_architecture_compiler_generator_list:
+        if entry.context_os_architecture.os == OS.LINUX and entry.context_compiler_generator.compiler_family == Compiler.GCC:
+            new_list += [entry]
+        if entry.context_os_architecture.os == OS.WINDOWS \
+            and entry.context_compiler_generator.compiler_family == Compiler.MSVC \
+            and entry.context_compiler_generator.compiler_version == ContextCompilerGenerator.COMPILER_VERSION_MSVC_2022_17:
+            new_list += [entry]
+    
+
+    o.execution_matrix.os_architecture_compiler_generator_list = new_list
 
     o.create_default_github_workflow(
         config=CreateGitHubWorkflowConfig(
@@ -146,7 +160,6 @@ def create_orchestrator() -> OptionalOrchestratorWithReport:
                 "libxkbcommon-x11-dev",
                 "libopenjp2-7",
                 "libxss-dev",
-                "libxcb-render-util0-dev",
                 "libudev-dev",
                 "libwayland-dev",
                 "libnss3-dev",
@@ -167,18 +180,20 @@ def create_orchestrator() -> OptionalOrchestratorWithReport:
             name="Free disk space (Linux-Ubuntu)",
             description="init repo",
             cmd=[
+                "set -euo pipefail",
+                '',
                 "# Show available space",
                 "df -h",
-                "",
+                '',
                 "# Remove unnecessary tools/packages (do not fail if they are not installed)",
                 "sudo apt-get remove -y '^ghc-8.*' '^dotnet-.*' '^mongodb.*' 'mysql-.*' 'php.*' 'powershell' 'snap.*' || true",
-                'sudo apt-get autoremove -y',
-                'sudo apt-get clean',
-                "",
+                "sudo apt-get autoremove -y",
+                "sudo apt-get clean",
+                '',
                 "# Remove large directories",
-                'sudo rm -rf /usr/local/lib/android || true',
-                'sudo rm -rf /opt/hostedtoolcache || true',
-                "",
+                "sudo rm -rf /usr/local/lib/android || true",
+                "sudo rm -rf /opt/hostedtoolcache || true",
+                '',
                 "# Show available space",
                 "df -h",
             ],
@@ -195,7 +210,12 @@ def create_orchestrator() -> OptionalOrchestratorWithReport:
         StepBashScriptCommand(
             name="init repo (Linux-Ubuntu)",
             description="init repo",
-            cmd=[f"cd workspace/{repo_name}", "./init-repository"],
+            cmd=[
+                'set -euo pipefail',
+                '',
+                f'cd workspace/{repo_name}', 
+                './init-repository'
+                ],
             dry_run=dry_run,
         )
         .add_extra(StepExecuteOnlyOncePerMatrix())
@@ -206,82 +226,79 @@ def create_orchestrator() -> OptionalOrchestratorWithReport:
 
     p.add_step(
         StepBashScriptCommand(
-            name="configure/build/install (Linux-Ubuntu)",
-            description="init repo",
+            name="Configure (Linux-Ubuntu)",
+            description="configure repo",
             cmd=[
-                "set -euo pipefail",
-                "",
-                "cd workspace/",
-                "",
-                "WORKSPACE_ROOT=$(pwd)",
-                'INSTALL_FOLDER_NAME="$CS_DIR_FROM_MATRIX"',
-                'BUILD_FOLDER_NAME="build-$CS_MATRIX_EXEC_ID"',
-                'GENERATOR_TYPE="$CS_GENERATOR_TYPE"',
-                'GENERATOR_TYPE_SINGLECONFIG="$CS_GENERATOR_TYPE_SINGLECONFIG"',
-                'GENERATOR_TYPE_MULTICONFIG="$CS_GENERATOR_TYPE_MULTICONFIG"',
-                'GENERATOR_CMAKE="$CS_GENERATOR_CMAKE"',
-                'C_COMPILER="$CS_C_COMPILER"',
-                'CPP_COMPILER="$CS_CPP_COMPILER"',
-                "",
-                ': "${INSTALL_FOLDER_NAME:?missing INSTALL_FOLDER_NAME}"',
-                ': "${BUILD_FOLDER_NAME:?missing BUILD_FOLDER_NAME}"',
-                ': "${GENERATOR_TYPE:?missing GENERATOR_TYPE}"',
-                ': "${GENERATOR_TYPE_SINGLECONFIG:?missing GENERATOR_TYPE_SINGLECONFIG}"',
-                ': "${GENERATOR_TYPE_MULTICONFIG:?missing GENERATOR_TYPE_MULTICONFIG}"',
-                ': "${GENERATOR_CMAKE:?missing GENERATOR_CMAKE}"',
-                "",
-                "CMAKE_ARGS=()",
-                "",
-                '[[ -n "$C_COMPILER"   ]] && CMAKE_ARGS+=("-DCMAKE_C_COMPILER=$C_COMPILER")',
-                '[[ -n "$CPP_COMPILER" ]] && CMAKE_ARGS+=("-DCMAKE_CXX_COMPILER=$CPP_COMPILER")',
-                "",
-                'mkdir -p "install/${INSTALL_FOLDER_NAME}/' + repo_name + '"',
-                "",
-                'if [[ "${GENERATOR_TYPE}" == "${GENERATOR_TYPE_SINGLECONFIG}" ]]; then',
-                "",
-                '    cd "${WORKSPACE_ROOT}"',
-                "",
-                '    mkdir -p "build/${BUILD_FOLDER_NAME}/' + repo_name + '/release"',
-                '    cd "build/${BUILD_FOLDER_NAME}/' + repo_name + '/release"',
-                "",
-                '    "${WORKSPACE_ROOT}/'
-                + repo_name
-                + '/configure" -no-pch -skip qtwebengine -release -cmake-generator "${GENERATOR_CMAKE}" "${CMAKE_ARGS[@]}" -prefix "${WORKSPACE_ROOT}/install/${INSTALL_FOLDER_NAME}/'
-                + repo_name
-                + '"',
-                "",
-                "    cmake --build .",
-                "",
-                "    cmake --install .",
-                "",
-                'elif [[ "${GENERATOR_TYPE}" == "${GENERATOR_TYPE_MULTICONFIG}" ]]; then',
-                "",
-                '    mkdir -p "build/${BUILD_FOLDER_NAME}/' + repo_name + '"',
-                '    cd "build/${BUILD_FOLDER_NAME}/' + repo_name + '"',
-                "",
-                '    "${WORKSPACE_ROOT}/'
-                + repo_name
-                + '/configure" -no-pch -skip qtwebengine  -cmake-generator "${GENERATOR_CMAKE}" "${CMAKE_ARGS[@]}" -prefix "${WORKSPACE_ROOT}/install/${INSTALL_FOLDER_NAME}/'
-                + repo_name
-                + '"',
-                "",
-                "    cmake --build . --config Release",
-                "",
-                "    cmake --install . --config Release",
-                "",
-                "else",
-                '    echo "Unknown generator_type: ${GENERATOR_TYPE}"',
-                "    exit 1",
-                "fi",
-            ],
-            dry_run=dry_run,
+                'set -euo pipefail',
+                '',
+                'ROOT_FOLDER=$(pwd)',
+                '',
+                'FOLDER_NAME="$CS_DIR_FROM_MATRIX"',
+                ': "${FOLDER_NAME:?missing FOLDER_NAME}"',
+                '',
+                f'REPO_FOLDER="${{ROOT_FOLDER}}/workspace/{repo_name}"',
+                f'BUILD_FOLDER="${{ROOT_FOLDER}}/workspace/build/${{FOLDER_NAME}}/{repo_name}/release"',
+                f'INSTALL_FOLDER="${{ROOT_FOLDER}}/workspace/install/${{FOLDER_NAME}}/{repo_name}"',
+                '',
+                'mkdir -p "${INSTALL_FOLDER}"',
+                'mkdir -p "${BUILD_FOLDER}"',
+                '',
+                'cd "${BUILD_FOLDER}"',
+                '',
+                '"${REPO_FOLDER}/configure" -no-pch -skip qtwebengine -release -prefix "${INSTALL_FOLDER}"',
+            ]
+        ).add_extra(
+            StepExecuteOnlyOn(os=OS.LINUX, version_starts_with=UBUNTU_STRING_PREFIX)
+        )
+    )
+
+    p.add_step(
+        StepBashScriptCommand(
+            name="Build (Linux-Ubuntu)",
+            description="build repo",
+            cmd=[
+                'set -euo pipefail',
+                '',
+                'ROOT_FOLDER=$(pwd)',
+                '',
+                'FOLDER_NAME="$CS_DIR_FROM_MATRIX"',
+                ': "${FOLDER_NAME:?missing FOLDER_NAME}"',
+                '',
+                f'BUILD_FOLDER="${{ROOT_FOLDER}}/workspace/build/${{FOLDER_NAME}}/{repo_name}/release"',
+                '',
+                'cd "${BUILD_FOLDER}"',
+                '',
+                'cmake --build . --parallel 4',
+            ]
+        ).add_extra(
+            StepExecuteOnlyOn(os=OS.LINUX, version_starts_with=UBUNTU_STRING_PREFIX)
+        )
+    )
+
+    p.add_step(
+        StepBashScriptCommand(
+            name="Install (Linux-Ubuntu)",
+            description="build repo",
+            cmd=[
+                'set -euo pipefail',
+                '',
+                'ROOT_FOLDER=$(pwd)',
+                '',
+                'FOLDER_NAME="$CS_DIR_FROM_MATRIX"',
+                ': "${FOLDER_NAME:?missing FOLDER_NAME}"',
+                '',
+                f'BUILD_FOLDER="${{ROOT_FOLDER}}/workspace/build/${{FOLDER_NAME}}/{repo_name}/release"',
+                '',
+                'cd "${BUILD_FOLDER}"',
+                '',
+                'cmake --install .',
+            ]
         ).add_extra(
             StepExecuteOnlyOn(os=OS.LINUX, version_starts_with=UBUNTU_STRING_PREFIX)
         )
     )
 
     # ----------------- WINDOWS -----------------
-
     p = o.create_phase(f"Configure-Build-Test-Install (Windows)")
 
     p.add_step(
@@ -305,22 +322,22 @@ def create_orchestrator() -> OptionalOrchestratorWithReport:
             description="show msvc verison",
             cmd=[
                 'Write-Host "=== Visual Studio ==="',
-                "",
+                '',
                 '& "${env:ProgramFiles(x86)}\\Microsoft Visual Studio\\Installer\\vswhere.exe" `',
                 "    -latest `",
                 "    -products * `",
                 "    -property installationName",
-                "",
+                '',
                 '& "${env:ProgramFiles(x86)}\\Microsoft Visual Studio\\Installer\\vswhere.exe" `',
                 "    -latest `",
                 "    -products * `",
                 "    -property catalog_productDisplayVersion",
-                "",
+                '',
                 'Write-Host ""',
                 'Write-Host "=== MSVC ==="',
-                "",
+                '',
                 "$cl = Get-Command cl.exe -ErrorAction Stop",
-                "",
+                '',
                 'Write-Host "cl.exe:"',
                 "Write-Host $cl.Source",
              ],
@@ -338,7 +355,12 @@ def create_orchestrator() -> OptionalOrchestratorWithReport:
         StepWinPSCommand(
             name="init repo (Windows)",
             description="init repo",
-            cmd=["cd workspace/" + repo_name, "./init-repository.bat"],
+            cmd=[
+                "Set-StrictMode -Version Latest",
+                "$ErrorActionPreference = 'Stop'",
+                '',
+                "cd workspace/" + repo_name, 
+                './init-repository.bat'],
             dry_run=dry_run,
         )
         .add_extra(StepExecuteOnlyOncePerMatrix())
@@ -351,115 +373,34 @@ def create_orchestrator() -> OptionalOrchestratorWithReport:
 
     p.add_step(
         StepWinPSCommand(
-            name="configure/build/install (Windows)",
-            description="init repo",
+            name="Configure (Windows)",
+            description="configure repo",
             cmd=[
                 "Set-StrictMode -Version Latest",
                 "$ErrorActionPreference = 'Stop'",
-                "",
-                "# Enable long path support (Windows 10+)",
-                "try {",
-                '    New-ItemProperty -Path "HKLM:\\SYSTEM\\CurrentControlSet\\Control\\FileSystem\\" -Name "LongPathsEnabled" -Value 1 -Force | Out-Null',
-                "} catch {",
-                '    Write-Host "Unable to enable long paths, continuing..."',
-                "}",
-                "",
-                "cd workspace",
-                "",
+                '',
                 'if (!(Test-Path ".venv")) {',
                 "    python -m venv .venv",
                 "}",
-                "",
                 '& ".\\.venv\\Scripts\\Activate.ps1"',
-                "",
                 "python -m pip install --upgrade pip",
-                "",
                 "pip install html5lib",
-                "",
-                "$WORKSPACE_ROOT = Get-Location",
-                '$BUILD_FOLDER_NAME = "build-$CS_MATRIX_EXEC_ID"',
-                '$INSTALL_FOLDER_NAME = "$CS_DIR_FROM_MATRIX"',
-                '$GENERATOR_TYPE = "$CS_GENERATOR_TYPE"',
-                '$GENERATOR_TYPE_SINGLECONFIG = "$CS_GENERATOR_TYPE_SINGLECONFIG"',
-                '$GENERATOR_TYPE_MULTICONFIG = "$CS_GENERATOR_TYPE_MULTICONFIG"',
-                '$GENERATOR_CMAKE = "$CS_GENERATOR_CMAKE"',
-                '$C_COMPILER = "$CS_C_COMPILER"',
-                '$CPP_COMPILER = "$CS_CPP_COMPILER"',
-                '$TOOLSET="$CS_TOOLSET"',
-                "",
-                'New-Item -ItemType Directory -Force -Path "$WORKSPACE_ROOT/install/$INSTALL_FOLDER_NAME/'
-                + repo_name
-                + '" | Out-Null',
-                "",
-                'if ($TOOLSET -eq "ClangCL") {',
-                '    if (-not $C_COMPILER) {',
-                '        $C_COMPILER = "clang-cl.exe"',
-                '    }',
                 '',
-                '    if (-not $CPP_COMPILER) {',
-                '        $CPP_COMPILER = "clang-cl.exe"',
-                '    }',
-                '}',
-                "",
-                "$CMAKE_ARGS = @()",
-                #'$CMAKE_ARGS += "-DCMAKE_RC_COMPILER_INIT=rc.exe"',
-                #'$CMAKE_ARGS += "-DCMAKE_RC_COMPILER=rc.exe"',
-                #'$CMAKE_ARGS += "-DCMAKE_RC_USE_RESPONSE_FILE=ON"',
-                'if ($C_COMPILER) { $CMAKE_ARGS += "-DCMAKE_C_COMPILER=$C_COMPILER" }',
-                'if ($CPP_COMPILER) { $CMAKE_ARGS += "-DCMAKE_CXX_COMPILER=$CPP_COMPILER" }',
-                #'$CMAKE_ARGS += \'-DCMAKE_CXX_FLAGS_INIT=/D_SILENCE_EXPERIMENTAL_COROUTINE_DEPRECATION_WARNINGS\'',
-                "",
-                "if ($GENERATOR_TYPE -eq $GENERATOR_TYPE_SINGLECONFIG) {",
-                "",
-                '    $RELEASE_DIR = "$WORKSPACE_ROOT/build/$BUILD_FOLDER_NAME/'
-                + repo_name
-                + '/release"',
-                "    New-Item -ItemType Directory -Force -Path $RELEASE_DIR | Out-Null",
-                "    Set-Location $RELEASE_DIR",
-                "",
-                '    & "$WORKSPACE_ROOT/'
-                + repo_name
-                + '/configure.bat" -no-pch -skip qtwebengine -release -cmake-generator $GENERATOR_CMAKE @CMAKE_ARGS -prefix "$WORKSPACE_ROOT/install/$INSTALL_FOLDER_NAME/'
-                + repo_name
-                + '"',
-                "    if ($LASTEXITCODE) { exit $LASTEXITCODE }",
-                "",
-                "    cmake --build . ",
-                "    if ($LASTEXITCODE) { exit $LASTEXITCODE }",
-                "",
-                "    cmake --install .",
-                "    if ($LASTEXITCODE) { exit $LASTEXITCODE }",
-                "",
-                "",
-                "}",
-                "elseif ($GENERATOR_TYPE -eq $GENERATOR_TYPE_MULTICONFIG) {",
-                "",
-                '    $BUILD_DIR = "$WORKSPACE_ROOT/build/$BUILD_FOLDER_NAME/'
-                + repo_name
-                + '"',
-                "    New-Item -ItemType Directory -Force -Path $BUILD_DIR | Out-Null",
-                "    Set-Location $BUILD_DIR",
-                "",
-                '    & "$WORKSPACE_ROOT/'
-                + repo_name
-                + '/configure.bat" -no-pch -skip qtwebengine -cmake-generator $GENERATOR_CMAKE @CMAKE_ARGS -prefix "$WORKSPACE_ROOT/install/$INSTALL_FOLDER_NAME/'
-                + repo_name
-                + '"',
-                "    if ($LASTEXITCODE) { exit $LASTEXITCODE }",
-                "",
-                "",
-                "    cmake --build . -config Release",
-                "    if ($LASTEXITCODE) { exit $LASTEXITCODE }",
-                "",
-                "",
-                "    cmake --install . --config Release",
-                "    if ($LASTEXITCODE) { exit $LASTEXITCODE }",
-                "",
-                "}",
-                "else {",
-                '    Write-Host "Unknown generator_type: $GENERATOR_TYPE"',
-                "    exit 1",
-                "}",
+                "$ROOT_FOLDER = Get-Location",
+                '',
+                '$FOLDER_NAME = "$CS_DIR_FROM_MATRIX"',
+                '',
+                f'$REPO_FOLDER="$ROOT_FOLDER/workspace/{repo_name}"',
+                f'$BUILD_FOLDER="$ROOT_FOLDER/workspace/build/$FOLDER_NAME/{repo_name}/release"',
+                f'$INSTALL_FOLDER="$ROOT_FOLDER/workspace/install/$FOLDER_NAME/{repo_name}"',
+                '',
+                'New-Item -ItemType Directory -Force -Path "$INSTALL_FOLDER" | Out-Null',
+                'New-Item -ItemType Directory -Force -Path "$BUILD_FOLDER" | Out-Null',
+                '',
+                "Set-Location $BUILD_FOLDER",
+                '',
+                '& "$REPO_FOLDER/configure.bat" -no-pch -skip qtwebengine -release -prefix "$INSTALL_FOLDER"',
+                "if ($LASTEXITCODE) { exit $LASTEXITCODE }",
             ],
             dry_run=dry_run,
         ).add_extra(
@@ -469,13 +410,68 @@ def create_orchestrator() -> OptionalOrchestratorWithReport:
         )
     )
 
+    p.add_step(
+        StepWinPSCommand(
+            name="Build (Windows)",
+            description="build repo",
+            cmd=[
+                "Set-StrictMode -Version Latest",
+                "$ErrorActionPreference = 'Stop'",
+                '',
+                "$ROOT_FOLDER = Get-Location",
+                '',
+                '$FOLDER_NAME = "$CS_DIR_FROM_MATRIX"',
+                '',
+                f'$BUILD_FOLDER="$ROOT_FOLDER/workspace/build/$FOLDER_NAME/{repo_name}/release"',
+                '',
+                '',
+                "Set-Location $BUILD_FOLDER",
+                '',
+                "cmake --build .  --parallel 4",
+                "if ($LASTEXITCODE) { exit $LASTEXITCODE }",
+            ],
+            dry_run=dry_run,
+        ).add_extra(
+            StepExecuteOnlyOn(
+                os=OS.WINDOWS,
+            )
+        )
+    )
+
+    p.add_step(
+        StepWinPSCommand(
+            name="Install (Windows)",
+            description="build repo",
+            cmd=[
+                "Set-StrictMode -Version Latest",
+                "$ErrorActionPreference = 'Stop'",
+                '',
+                "$ROOT_FOLDER = Get-Location",
+                '',
+                '$FOLDER_NAME = "$CS_DIR_FROM_MATRIX"',
+                '',
+                f'$BUILD_FOLDER="$ROOT_FOLDER/workspace/build/$FOLDER_NAME/{repo_name}/release"',
+                '',
+                '',
+                "Set-Location $BUILD_FOLDER",
+                '',
+                "cmake --install . ",
+                "if ($LASTEXITCODE) { exit $LASTEXITCODE }",
+            ],
+            dry_run=dry_run,
+        ).add_extra(
+            StepExecuteOnlyOn(
+                os=OS.WINDOWS,
+            )
+        )
+    )
     p = o.create_phase(f"Create and Upload Artifacts")
 
     p.add_step(
         StepGetVersionsFromCMakeConfigPackageVersion(
             name="Get Versions",
             description="Get Versions for all libs",
-            repos_auto_search_list=[repo_name],
+            repos_version=[CMakeConfigPackageVersion(repo_name, qt_version_tag)],
             base_install_dir=base_install_dir,
             id="versions",
             output_dict_name="packages",
