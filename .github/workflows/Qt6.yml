@@ -218,7 +218,7 @@ jobs:
           
           cd "${BUILD_FOLDER}"
           
-          cmake --build . --parallel 4
+          cmake --build .
 
       - name: Run command Install (Linux-Ubuntu)
         if: ${{ matrix.os == 'linux' && startsWith(matrix.os_version, 'ubuntu') }}
@@ -294,9 +294,10 @@ jobs:
           $ROOT_FOLDER = Get-Location
           
           $FOLDER_NAME = "csv1-${{ matrix.os }}-${{ matrix.os_version }}-${{ matrix.architecture }}-${{ matrix.architecture_variant }}-${{ matrix.compiler }}-${{ matrix.compiler_version }}-${{ matrix.generator }}"
+          $BUILD_FOLDER_NAME = "build-${{ matrix.execution_id }}"
           
           $REPO_FOLDER="$ROOT_FOLDER/workspace/qt6"
-          $BUILD_FOLDER="$ROOT_FOLDER/workspace/build/$FOLDER_NAME/qt6/release"
+          $BUILD_FOLDER="$ROOT_FOLDER/workspace/build/$BUILD_FOLDER_NAME/qt6/release"
           $INSTALL_FOLDER="$ROOT_FOLDER/workspace/install/$FOLDER_NAME/qt6"
           
           New-Item -ItemType Directory -Force -Path "$INSTALL_FOLDER" | Out-Null
@@ -316,14 +317,14 @@ jobs:
           
           $ROOT_FOLDER = Get-Location
           
-          $FOLDER_NAME = "csv1-${{ matrix.os }}-${{ matrix.os_version }}-${{ matrix.architecture }}-${{ matrix.architecture_variant }}-${{ matrix.compiler }}-${{ matrix.compiler_version }}-${{ matrix.generator }}"
+          $BUILD_FOLDER_NAME = "build-${{ matrix.execution_id }}"
           
-          $BUILD_FOLDER="$ROOT_FOLDER/workspace/build/$FOLDER_NAME/qt6/release"
+          $BUILD_FOLDER="$ROOT_FOLDER/workspace/build/$BUILD_FOLDER_NAME/qt6/release"
           
           
           Set-Location $BUILD_FOLDER
           
-          cmake --build .  --parallel 4
+          cmake --build .
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
 
       - name: Run command Install (Windows)
@@ -335,9 +336,9 @@ jobs:
           
           $ROOT_FOLDER = Get-Location
           
-          $FOLDER_NAME = "csv1-${{ matrix.os }}-${{ matrix.os_version }}-${{ matrix.architecture }}-${{ matrix.architecture_variant }}-${{ matrix.compiler }}-${{ matrix.compiler_version }}-${{ matrix.generator }}"
+          $BUILD_FOLDER_NAME = "build-${{ matrix.execution_id }}"
           
-          $BUILD_FOLDER="$ROOT_FOLDER/workspace/build/$FOLDER_NAME/qt6/release"
+          $BUILD_FOLDER="$ROOT_FOLDER/workspace/build/$BUILD_FOLDER_NAME/qt6/release"
           
           
           Set-Location $BUILD_FOLDER
