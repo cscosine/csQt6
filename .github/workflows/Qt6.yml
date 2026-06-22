@@ -1,0 +1,476 @@
+name: Qt6
+
+on:
+  push:
+    branches:
+      - main
+      - dev
+    tags:
+      - 'v*.*.*'
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+  schedule:
+    - cron: '0 3 * * 1'
+
+jobs:
+  release-from-artifacts:
+    needs: orchestrator-matrix
+    runs-on: ubuntu-latest
+
+    if: ${{ github.ref_type == 'tag' }}
+
+    permissions:
+      contents: write
+
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v8
+        with:
+          path: artifacts
+
+      - name: Show downloaded files
+        run: find artifacts -type f
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v3
+        with:
+          files: |
+            artifacts/**/*    
+
+  orchestrator-matrix:
+    runs-on: ${{ matrix.runner }}
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - execution_id: 0
+            os: linux
+            os_version: ubuntu22.04
+            architecture: x64
+            architecture_variant: generic
+            compiler: gcc
+            c_compiler: gcc
+            cpp_compiler: g++
+            compiler_version: default
+            generator: ninja
+            generator_type: singleconfig
+            generator_cmake: Ninja
+            runner: ubuntu-22.04
+          - execution_id: 1
+            os: linux
+            os_version: ubuntu24.04
+            architecture: x64
+            architecture_variant: generic
+            compiler: gcc
+            c_compiler: gcc
+            cpp_compiler: g++
+            compiler_version: default
+            generator: ninja
+            generator_type: singleconfig
+            generator_cmake: Ninja
+            runner: ubuntu-24.04
+          - execution_id: 2
+            os: windows
+            os_version: v10
+            architecture: x64
+            architecture_variant: generic
+            compiler: msvc
+            compiler_version: msvc_2022_17
+            generator: ninja
+            generator_type: singleconfig
+            generator_cmake: Ninja
+            runner: windows-2022
+
+    steps:
+      - name: qt6
+        uses: actions/checkout@v6
+        with:
+          repository: qt/qt5.git
+          path: workspace/qt6
+          ref: v6.11.1
+          fetch-depth: 1
+
+      - name: Run command install apt packages
+        if: ${{ matrix.os == 'linux' && startsWith(matrix.os_version, 'ubuntu') }}
+        shell: bash
+        run: |
+          set -euo pipefail # enable strict mode
+          
+          
+          packages=(
+            libfontconfig1-dev
+            libfreetype-dev
+            libgtk-3-dev
+            libx11-dev
+            libx11-xcb-dev
+            libxcb-cursor-dev
+            libxcb-glx0-dev
+            libxcb-icccm4-dev
+            libxcb-image0-dev
+            libxcb-keysyms1-dev
+            libxcb-randr0-dev
+            libxcb-render-util0-dev
+            libxcb-shape0-dev
+            libxcb-shm0-dev
+            libxcb-sync-dev
+            libxcb-util-dev
+            libxcb-xfixes0-dev
+            libxcb-xkb-dev
+            libxcb1-dev
+            libxext-dev
+            libxfixes-dev
+            libxi-dev
+            libxkbcommon-dev
+            libxkbcommon-x11-dev
+            libopenjp2-7
+            libxss-dev
+            libudev-dev
+            libwayland-dev
+            libnss3-dev
+            gperf
+            doxygen
+            python3-html5lib
+          )
+          
+          missing=()
+          
+          for pkg in "${packages[@]}"; do
+            dpkg -s "$pkg" &>/dev/null || missing+=("$pkg")
+          done
+          
+          if [ ${#missing[@]} -ne 0 ]; then
+          
+            sudo apt update
+          
+            echo "Need to install missing packages: ${missing[*]}"
+            sudo apt install -y "${missing[@]}"
+          else
+            echo "All packages already installed."
+          fi
+
+      - name: Run command Free disk space (Linux-Ubuntu)
+        if: ${{ matrix.os == 'linux' && startsWith(matrix.os_version, 'ubuntu') }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          
+          # Show available space
+          df -h
+          
+          # Remove unnecessary tools/packages (do not fail if they are not installed)
+          sudo apt-get remove -y '^ghc-8.*' '^dotnet-.*' '^mongodb.*' 'mysql-.*' 'php.*' 'powershell' 'snap.*' || true
+          sudo apt-get autoremove -y
+          sudo apt-get clean
+          
+          # Remove large directories
+          sudo rm -rf /usr/local/lib/android || true
+          sudo rm -rf /opt/hostedtoolcache || true
+          
+          # Show available space
+          df -h
+
+      - name: Run command init repo (Linux-Ubuntu)
+        if: ${{ matrix.os == 'linux' && startsWith(matrix.os_version, 'ubuntu') }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          
+          cd workspace/qt6
+          ./init-repository
+
+      - name: Run command Configure (Linux-Ubuntu)
+        if: ${{ matrix.os == 'linux' && startsWith(matrix.os_version, 'ubuntu') }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          
+          ROOT_FOLDER=$(pwd)
+          
+          FOLDER_NAME="csv1-${{ matrix.os }}-${{ matrix.os_version }}-${{ matrix.architecture }}-${{ matrix.architecture_variant }}-${{ matrix.compiler }}-${{ matrix.compiler_version }}-${{ matrix.generator }}"
+          : "${FOLDER_NAME:?missing FOLDER_NAME}"
+          
+          REPO_FOLDER="${ROOT_FOLDER}/workspace/qt6"
+          BUILD_FOLDER="${ROOT_FOLDER}/workspace/build/${FOLDER_NAME}/qt6/release"
+          INSTALL_FOLDER="${ROOT_FOLDER}/workspace/install/${FOLDER_NAME}/qt6"
+          
+          mkdir -p "${INSTALL_FOLDER}"
+          mkdir -p "${BUILD_FOLDER}"
+          
+          cd "${BUILD_FOLDER}"
+          
+          "${REPO_FOLDER}/configure" -no-pch -skip qtwebengine -release -prefix "${INSTALL_FOLDER}"
+
+      - name: Run command Build (Linux-Ubuntu)
+        if: ${{ matrix.os == 'linux' && startsWith(matrix.os_version, 'ubuntu') }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          
+          ROOT_FOLDER=$(pwd)
+          
+          FOLDER_NAME="csv1-${{ matrix.os }}-${{ matrix.os_version }}-${{ matrix.architecture }}-${{ matrix.architecture_variant }}-${{ matrix.compiler }}-${{ matrix.compiler_version }}-${{ matrix.generator }}"
+          : "${FOLDER_NAME:?missing FOLDER_NAME}"
+          
+          BUILD_FOLDER="${ROOT_FOLDER}/workspace/build/${FOLDER_NAME}/qt6/release"
+          
+          cd "${BUILD_FOLDER}"
+          
+          cmake --build .
+
+      - name: Run command Install (Linux-Ubuntu)
+        if: ${{ matrix.os == 'linux' && startsWith(matrix.os_version, 'ubuntu') }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          
+          ROOT_FOLDER=$(pwd)
+          
+          FOLDER_NAME="csv1-${{ matrix.os }}-${{ matrix.os_version }}-${{ matrix.architecture }}-${{ matrix.architecture_variant }}-${{ matrix.compiler }}-${{ matrix.compiler_version }}-${{ matrix.generator }}"
+          : "${FOLDER_NAME:?missing FOLDER_NAME}"
+          
+          BUILD_FOLDER="${ROOT_FOLDER}/workspace/build/${FOLDER_NAME}/qt6/release"
+          
+          cd "${BUILD_FOLDER}"
+          
+          cmake --install .
+
+      - name: Setup MSVC
+        uses: TheMrMilchmann/setup-msvc-dev@v4
+        if: ${{ matrix.os == 'windows' }}
+        with:
+          arch: ${{ matrix.architecture }}
+
+      - name: Run command Show MSVC Version (Windows)
+        if: ${{ matrix.os == 'windows' }}
+        shell: powershell
+        run: |
+          Write-Host "=== Visual Studio ==="
+          
+          & "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" `
+              -latest `
+              -products * `
+              -property installationName
+          
+          & "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" `
+              -latest `
+              -products * `
+              -property catalog_productDisplayVersion
+          
+          Write-Host ""
+          Write-Host "=== MSVC ==="
+          
+          $cl = Get-Command cl.exe -ErrorAction Stop
+          
+          Write-Host "cl.exe:"
+          Write-Host $cl.Source
+
+      - name: Run command init repo (Windows)
+        if: ${{ matrix.os == 'windows' }}
+        shell: powershell
+        run: |
+          Set-StrictMode -Version Latest
+          $ErrorActionPreference = 'Stop'
+          
+          cd workspace/qt6
+          ./init-repository.bat
+
+      - name: Run command Configure (Windows)
+        if: ${{ matrix.os == 'windows' }}
+        shell: powershell
+        run: |
+          Set-StrictMode -Version Latest
+          $ErrorActionPreference = 'Stop'
+          
+          if (!(Test-Path ".venv")) {
+              python -m venv .venv
+          }
+          & ".\.venv\Scripts\Activate.ps1"
+          python -m pip install --upgrade pip
+          pip install html5lib
+          
+          $ROOT_FOLDER = Get-Location
+          
+          $FOLDER_NAME = "csv1-${{ matrix.os }}-${{ matrix.os_version }}-${{ matrix.architecture }}-${{ matrix.architecture_variant }}-${{ matrix.compiler }}-${{ matrix.compiler_version }}-${{ matrix.generator }}"
+          $BUILD_FOLDER_NAME = "build-${{ matrix.execution_id }}"
+          
+          $REPO_FOLDER="$ROOT_FOLDER/workspace/qt6"
+          $BUILD_FOLDER="$ROOT_FOLDER/workspace/build/$BUILD_FOLDER_NAME/qt6/release"
+          $INSTALL_FOLDER="$ROOT_FOLDER/workspace/install/$FOLDER_NAME/qt6"
+          
+          New-Item -ItemType Directory -Force -Path "$INSTALL_FOLDER" | Out-Null
+          New-Item -ItemType Directory -Force -Path "$BUILD_FOLDER" | Out-Null
+          
+          Set-Location $BUILD_FOLDER
+          
+          & "$REPO_FOLDER/configure.bat" -no-pch -skip qtwebengine -release -prefix "$INSTALL_FOLDER"
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+
+      - name: Run command Build (Windows)
+        if: ${{ matrix.os == 'windows' }}
+        shell: powershell
+        run: |
+          Set-StrictMode -Version Latest
+          $ErrorActionPreference = 'Stop'
+          
+          $ROOT_FOLDER = Get-Location
+          
+          $BUILD_FOLDER_NAME = "build-${{ matrix.execution_id }}"
+          
+          $BUILD_FOLDER="$ROOT_FOLDER/workspace/build/$BUILD_FOLDER_NAME/qt6/release"
+          
+          
+          Set-Location $BUILD_FOLDER
+          
+          cmake --build .
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+
+      - name: Run command Install (Windows)
+        if: ${{ matrix.os == 'windows' }}
+        shell: powershell
+        run: |
+          Set-StrictMode -Version Latest
+          $ErrorActionPreference = 'Stop'
+          
+          $ROOT_FOLDER = Get-Location
+          
+          $BUILD_FOLDER_NAME = "build-${{ matrix.execution_id }}"
+          
+          $BUILD_FOLDER="$ROOT_FOLDER/workspace/build/$BUILD_FOLDER_NAME/qt6/release"
+          
+          
+          Set-Location $BUILD_FOLDER
+          
+          cmake --install . 
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+
+      - name: Get Versions
+        id: versions
+        shell: python
+        run: |
+          from pathlib import Path
+          import re
+          import json
+          import sys
+          import os
+          
+          def grep_package_version(filename: Path) -> tuple[str | None, str | None]:
+              path = Path(filename)
+          
+              if not path.is_file():
+                  return (None, f"ERROR: file not found: {path}")
+          
+              content = path.read_text(encoding="utf-8")
+          
+              matches = []
+          
+              for m in re.finditer(
+                  r'set\s*\(\s*PACKAGE_VERSION\s+("([^"]*)"|([^\s\)]+))\s*\)',
+                  content,
+              ):
+                  value = m.group(2) or m.group(3)
+          
+                  # Ignore computed values like "${PACKAGE_VERSION} (...)"
+                  if "${" in value:
+                      continue
+          
+                  matches.append(value)
+          
+              if len(matches) != 1:
+                  return (None, f"ERROR: {path}: expected exactly one PACKAGE_VERSION definition, found {len(matches)}")
+          
+              version = matches[0]
+              return (version, None)
+          
+          def find_cmake_config_version(search_path: Path, name: str) -> tuple[Path | None, str | None]:
+              candidates = {
+                  f"{name}-config-version.cmake".lower(),
+                  f"{name}ConfigVersion.cmake".lower(),
+              }
+          
+              matches = [p for p in search_path.rglob("*") if p.is_file() and p.name.lower() in candidates]
+          
+              if not matches:
+                  return (None, f"No config version file found for '{name}' under '{search_path}'")
+          
+              if len(matches) > 1:
+                  return (None, "Multiple config version files found:" + ", ".join(str(p) for p in matches))
+          
+              return (matches[0], None)
+          
+          files = {
+          }
+          
+          result = []
+          
+          result.append({'name': 'qt6','version': 'v6.11.1'})
+          
+          for name, filename in files.items():
+            v_or_err = grep_package_version(filename=filename)
+            if v_or_err[0] is not None:
+                version = v_or_err[0]
+                result.append({'name': name,'version': version})
+            elif v_or_err[1] is not None:
+                sys.exit(f'ERROR: processing {name} at {filename}: {v_or_err[1]}')
+            else:
+                sys.exit('ERROR: unexpected behavior of grep_package_version processing {name} at {filename}')
+          
+          repos_auto_search_list = [
+          ]
+          
+          for name in repos_auto_search_list:
+            search_path: Path = Path('workspace/install/csv1-${{ matrix.os }}-${{ matrix.os_version }}-${{ matrix.architecture }}-${{ matrix.architecture_variant }}-${{ matrix.compiler }}-${{ matrix.compiler_version }}-${{ matrix.generator }}') / name
+            path_or_err = find_cmake_config_version(search_path=search_path, name=name)
+            if path_or_err[0] is not None:
+              path = path_or_err[0]
+              v_or_err = grep_package_version(filename=path)
+              if v_or_err[0] is not None:
+                version = v_or_err[0]
+                result.append({'name': name,'version': version})
+              elif v_or_err[1] is not None:
+                sys.exit(f'ERROR: processing {name} at {path}: {v_or_err[1]}')
+              else:
+                sys.exit('ERROR: unexpected behavior of grep_package_version processing {name} at {path}')
+            elif path_or_err[1] is not None:
+                sys.exit(f'ERROR: processing {name} : {path_or_err[1]}')
+            else:
+                sys.exit('ERROR: unexpected behavior of find_cmake_config_version processing {name}')
+          
+          
+          output_file = os.environ["GITHUB_OUTPUT"]
+          with open(output_file, "w", encoding="utf-8") as f:
+              f.write(f"packages={json.dumps(result)}\n")
+          
+
+      - name: Create Archives
+        env:
+          VERSIONS: ${{ steps.versions.outputs.packages }}
+        shell: python
+        run: |
+          import json
+          import os
+          import tarfile
+          from pathlib import Path
+          
+          versions = json.loads(os.environ['VERSIONS'])
+          
+          for entry in versions:
+              name = entry['name']
+              version = entry['version']
+              install_subdir = Path('workspace/install/csv1-${{ matrix.os }}-${{ matrix.os_version }}-${{ matrix.architecture }}-${{ matrix.architecture_variant }}-${{ matrix.compiler }}-${{ matrix.compiler_version }}-${{ matrix.generator }}').resolve()
+              input_path = Path(install_subdir / Path(name)).resolve()
+              output_path = Path(install_subdir / Path('csv1-${{ matrix.os }}-${{ matrix.os_version }}-${{ matrix.architecture }}-${{ matrix.architecture_variant }}-${{ matrix.compiler }}-${{ matrix.compiler_version }}-${{ matrix.generator }}' + '-' + name + '-' + version + '.tar.gz')).resolve()
+              
+              with tarfile.open(output_path, 'w:gz') as tar:
+                  for path in input_path.rglob('*'):
+                      resolved_path = path.resolve()
+                      arcname = path.resolve().relative_to(install_subdir)
+                      tar.add(resolved_path, arcname=arcname)
+
+      - name: Upload Artifacts
+        uses: actions/upload-artifact@v7
+        with:
+          name: Qt6-v6.11.1-csv1-${{ matrix.os }}-${{ matrix.os_version }}-${{ matrix.architecture }}-${{ matrix.architecture_variant }}-${{ matrix.compiler }}-${{ matrix.compiler_version }}-${{ matrix.generator }}
+          path: workspace/install/csv1-${{ matrix.os }}-${{ matrix.os_version }}-${{ matrix.architecture }}-${{ matrix.architecture_variant }}-${{ matrix.compiler }}-${{ matrix.compiler_version }}-${{ matrix.generator }}/*.tar.gz
