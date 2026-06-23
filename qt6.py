@@ -36,7 +36,7 @@ from csorchestrator.step.step_get_versions_from_cmake_config_package_version imp
 )
 from csorchestrator.step.step_create_archives import StepCreateArchives
 from csorchestrator.step.step_upload_artifacts import StepUploadArtifacts, create_artifact_prefix_from_orchestrator_name_version
-from csorchestrator.cli.factory  import OptionalOrchestratorWithReport, create_orchestrator_factory_all_supported_cases
+from csorchestrator.execution.factory  import OptionalOrchestratorWithReport, create_orchestrator_factory_all_supported_cases
 from csorchestrator.ci.github.guthub_workflow_matrix_constants import MatrixOsArchCompilerGeneratorGithubConstants
 
 def create_orchestrator() -> OptionalOrchestratorWithReport:
