@@ -4,20 +4,19 @@ import sys
 from pathlib import Path
 from typing import Sequence, TypeAlias
 
+from csorchestrator.foundation.core.report import Report
+from csorchestrator.foundation.core.optional_result_with_report import OptionalResultWithReport
+
 from csorchestrator.context.context_compiler_generator import Compiler, ContextCompilerGenerator
-from csorchestrator.core.report import Report
 from csorchestrator.context.context_os_architecture import OS, UBUNTU_STRING_PREFIX
-from csorchestrator.step.step_utils import StepExecuteOnlyOn
+
 from csorchestrator.step.step_get_repository import (
     RepoUrlParts,
     StepGetRepositoryGitHub,
     StepGetRepositoryExtraDepthOne,
 )
-from csorchestrator.step.step_utils import (
-    StepExecuteOnlyOn,
-    StepExecuteOnlyOncePerMatrix,
-    StepSkipExecutionOnLocal,
-)
+from csorchestrator.context.step_utils import StepExecuteOnlyOncePerMatrix, StepSkipExecutionOnLocal, StepExecuteOnlyOn
+
 from csorchestrator.step.step_custom_command import (
     StepBashScriptCommand,
     StepWinPSCommand,
@@ -26,9 +25,9 @@ from csorchestrator.step.step_custom_command import (
 
 from csorchestrator.step.step_github_action import StepAddGitHubAction
 
-from csorchestrator.core.optional_result_with_report import OptionalResultWithReport
+from csorchestrator.execution.factory  import OptionalOrchestratorWithReport, create_orchestrator_factory_all_supported_cases
 from csorchestrator.cli.cli import orchestrator_main_with_default_run
-from csorchestrator.orchestrator.workflow_config import WorkflowConfig, Cron, DayOfWeek, ReleaseCreationOnTagConfig
+from csorchestrator.domain.orchestrator.workflow_config import WorkflowConfig, Cron, DayOfWeek, ReleaseCreationOnTagConfig
 
 from csorchestrator.step.step_get_versions_from_cmake_config_package_version import (
     StepGetVersionsFromCMakeConfigPackageVersion,
@@ -36,7 +35,6 @@ from csorchestrator.step.step_get_versions_from_cmake_config_package_version imp
 )
 from csorchestrator.step.step_create_archives import StepCreateArchives
 from csorchestrator.step.step_upload_artifacts import StepUploadArtifacts, create_artifact_prefix_from_orchestrator_name_version
-from csorchestrator.execution.factory  import OptionalOrchestratorWithReport, create_orchestrator_factory_all_supported_cases
 from csorchestrator.ci.github.guthub_workflow_matrix_constants import MatrixOsArchCompilerGeneratorGithubConstants
 
 def create_orchestrator() -> OptionalOrchestratorWithReport:
