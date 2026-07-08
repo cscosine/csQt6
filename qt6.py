@@ -1,51 +1,36 @@
 #!/usr/bin/env python3
-import os
 import sys
 from pathlib import Path
-from typing import Sequence, TypeAlias
+from typing import Sequence
 
-from csorchestrator.context.context_compiler_generator import Compiler, ContextCompilerGenerator
-from csorchestrator.core.report import Report
-from csorchestrator.context.context_os_architecture import OS, UBUNTU_STRING_PREFIX
-from csorchestrator.step.step_utils import StepExecuteOnlyOn
-from csorchestrator.orchestrator.orchestrator import (
-    OptionalOrchestratorWithReport,
-    create_orchestrator_factory_all_supported_cases,
+from csorchestrator.foundation.core.report import Report
+from csorchestrator.foundation.core.optional_result_with_report import OptionalResultWithReport
+from csorchestrator.foundation.git.resolve_url import RepoUrlParts
+
+from csorchestrator.domain.orchestrator.workflow_config import WorkflowConfig, Cron, DayOfWeek, ReleaseCreationOnTagConfig
+from csorchestrator.domain.context.context_os_architecture import OS
+from csorchestrator.domain.context.context_compiler_generator import ContextCompilerGenerator, Compiler
+from csorchestrator.domain.context.context_os_architecture import UBUNTU_STRING_PREFIX
+
+from csorchestrator.frontend.step.step_get_repository import StepGetRepositoryGitHub, StepGetRepositoryExtraDepthOne
+from csorchestrator.frontend.step.step_get_versions_from_cmake_config_package_version import StepGetVersionsFromCMakeConfigPackageVersion, CMakeConfigPackageVersion
+from csorchestrator.frontend.step.step_create_archives import StepCreateArchives
+from csorchestrator.frontend.step.step_upload_artifacts import StepUploadArtifacts, create_artifact_prefix_from_orchestrator_name_version
+from csorchestrator.frontend.step.step_custom_command import StepInstallAptPackages, StepBashScriptCommand, StepWinPSCommand
+from csorchestrator.frontend.step.step_github_action import StepAddGitHubAction
+
+from csorchestrator.frontend.github_workflow_translation.github_workflow_matrix_constants import (
+    MatrixOsArchCompilerGeneratorGithubConstants,
 )
-from csorchestrator.step.step_get_repository import (
-    RepoUrlParts,
-    StepGetRepositoryGitHub,
-    StepGetRepositoryExtraDepthOne,
-)
-from csorchestrator.step.step_utils import (
-    StepExecuteOnlyOn,
+
+from csorchestrator.frontend.local_execution.step_utils import (
     StepExecuteOnlyOncePerMatrix,
     StepSkipExecutionOnLocal,
+    StepExecuteOnlyOn,
 )
-from csorchestrator.step.step_custom_command import (
-    StepBashScriptCommand,
-    StepWinPSCommand,
-    StepInstallAptPackages,
-)
-from csorchestrator.ci.github.github_workflow_config import MatrixOsArchCompilerGeneratorRunnerEntryInclude
 
-from csorchestrator.step.step_github_action import StepAddGitHubAction
-
-from csorchestrator.utils.presets.supported_variants import BuildConfig
-from csorchestrator.core.optional_result_with_report import OptionalResultWithReport
-from csorchestrator.cli.cli import orchestrator_main_with_default_run
-from csorchestrator.ci.github.github_workflow_config import (
-    CreateGitHubWorkflowConfig,
-    Cron,
-    DayOfWeek,
-    JobReleaseCreationFromArifacts,
-)
-from csorchestrator.step.step_get_versions_from_cmake_config_package_version import (
-    StepGetVersionsFromCMakeConfigPackageVersion,
-    CMakeConfigPackageVersion,
-)
-from csorchestrator.step.step_create_archives import StepCreateArchives
-from csorchestrator.step.step_upload_artifacts import StepUploadArtifacts
+from csorchestrator.application.factory.factory import OptionalOrchestratorWithReport, create_orchestrator_factory_all_supported_cases
+from csorchestrator.application.cli.cli import orchestrator_main_with_default_run
 
 
 def create_orchestrator() -> OptionalOrchestratorWithReport:
@@ -79,52 +64,38 @@ def create_orchestrator() -> OptionalOrchestratorWithReport:
 
     o.execution_matrix.os_architecture_compiler_generator_list = new_list
 
-    o.create_default_github_workflow(
-        config=CreateGitHubWorkflowConfig(
+    o.wf_config=WorkflowConfig(
             on_push_branches=["main", "dev"],
             on_push_tags=["'v*.*.*'"],
             on_pull_request_branches=["main"],
             on_dispatch=True,
             on_schedule=Cron.weekly(DayOfWeek.MON, hour=3),
+            create_release_on_tag=ReleaseCreationOnTagConfig(name="release-from-artifacts")
         )
-    )
-
-    o.default_github_wf.on_job(
-        job=JobReleaseCreationFromArifacts(
-            name="release-from-artifacts",
-            needs="orchestrator-matrix",
-            runs_on="ubuntu-latest",
-            if_str="${{ github.ref_type == 'tag' }}",
-        )
-    )
-
-    flag_repo_update = True
-    dry_run = False
 
     repo_name = "qt6"
 
     p = o.create_phase("Repo Update")
-    if flag_repo_update:
-        p.add_step(
-            StepGetRepositoryGitHub(
-                name=repo_name,
-                description=f"Clone or pull-ff {repo_name}",
-                target_directory=(base_target_dir / repo_name).as_posix(),
-                repo_url_parts=RepoUrlParts(
-                    repo_base_url=StepGetRepositoryGitHub.GITHUB_BASE_URL_SSH,
-                    repo_org="qt",
-                    repo_name="qt5" + ".git",
-                ),
-                repo_ref=qt_version_tag,
-            )
-            .add_extra(
-                StepGetRepositoryExtraDepthOne(
-                    on_local_checkout=True,  # shallow copy, huge repo
-                    on_github_action_checkout=True,
-                )
-            )
-            .add_extra(StepExecuteOnlyOncePerMatrix())
+    p.add_step(
+        StepGetRepositoryGitHub(
+            name=repo_name,
+            description=f"Clone or pull-ff {repo_name}",
+            target_directory=(base_target_dir / repo_name).as_posix(),
+            repo_url_parts=RepoUrlParts(
+                repo_base_url=StepGetRepositoryGitHub.GITHUB_BASE_URL_SSH,
+                repo_org="qt",
+                repo_name="qt5" + ".git",
+            ),
+            repo_ref=qt_version_tag,
         )
+        .add_extra(
+            StepGetRepositoryExtraDepthOne(
+                on_local_checkout=True,  # shallow copy, huge repo
+                on_github_action_checkout=True,
+            )
+        )
+        .add_extra(StepExecuteOnlyOncePerMatrix())
+    )
 
     # ----------------- LINUX -----------------
 
@@ -167,7 +138,7 @@ def create_orchestrator() -> OptionalOrchestratorWithReport:
                 "doxygen",
                 "python3-html5lib",
             ],
-            dry_run=dry_run,
+            dry_run=False,
         )
         .add_extra(StepExecuteOnlyOncePerMatrix())
         .add_extra(
@@ -197,7 +168,7 @@ def create_orchestrator() -> OptionalOrchestratorWithReport:
                 "# Show available space",
                 "df -h",
             ],
-            dry_run=dry_run,
+            dry_run=False,
         )
         .add_extra(
             StepExecuteOnlyOn(os=OS.LINUX, version_starts_with=UBUNTU_STRING_PREFIX)
@@ -216,7 +187,7 @@ def create_orchestrator() -> OptionalOrchestratorWithReport:
                 f'cd workspace/{repo_name}', 
                 './init-repository'
                 ],
-            dry_run=dry_run,
+            dry_run=False,
         )
         .add_extra(StepExecuteOnlyOncePerMatrix())
         .add_extra(
@@ -307,7 +278,7 @@ def create_orchestrator() -> OptionalOrchestratorWithReport:
             description="setup MSVC environment",
             uses="TheMrMilchmann/setup-msvc-dev@v4",
             with_list=[
-                f"arch: {MatrixOsArchCompilerGeneratorRunnerEntryInclude.MATRIX_ARCHITECTURE_EMBRACED}"
+                f"arch: {MatrixOsArchCompilerGeneratorGithubConstants.MATRIX_ARCHITECTURE_EMBRACED}"
             ]
         ).add_extra(
             StepExecuteOnlyOn(
@@ -341,7 +312,7 @@ def create_orchestrator() -> OptionalOrchestratorWithReport:
                 'Write-Host "cl.exe:"',
                 "Write-Host $cl.Source",
              ],
-            dry_run=dry_run,
+            dry_run=False,
         )
         .add_extra(StepExecuteOnlyOncePerMatrix())
         .add_extra(
@@ -361,7 +332,7 @@ def create_orchestrator() -> OptionalOrchestratorWithReport:
                 '',
                 "cd workspace/" + repo_name, 
                 './init-repository.bat'],
-            dry_run=dry_run,
+            dry_run=False,
         )
         .add_extra(StepExecuteOnlyOncePerMatrix())
         .add_extra(
@@ -403,7 +374,7 @@ def create_orchestrator() -> OptionalOrchestratorWithReport:
                 '& "$REPO_FOLDER/configure.bat" -no-pch -skip qtwebengine -release -prefix "$INSTALL_FOLDER"',
                 "if ($LASTEXITCODE) { exit $LASTEXITCODE }",
             ],
-            dry_run=dry_run,
+            dry_run=False,
         ).add_extra(
             StepExecuteOnlyOn(
                 os=OS.WINDOWS,
@@ -431,7 +402,7 @@ def create_orchestrator() -> OptionalOrchestratorWithReport:
                 "cmake --build .",
                 "if ($LASTEXITCODE) { exit $LASTEXITCODE }",
             ],
-            dry_run=dry_run,
+            dry_run=False,
         ).add_extra(
             StepExecuteOnlyOn(
                 os=OS.WINDOWS,
@@ -459,7 +430,7 @@ def create_orchestrator() -> OptionalOrchestratorWithReport:
                 "cmake --install . ",
                 "if ($LASTEXITCODE) { exit $LASTEXITCODE }",
             ],
-            dry_run=dry_run,
+            dry_run=False,
         ).add_extra(
             StepExecuteOnlyOn(
                 os=OS.WINDOWS,
@@ -494,6 +465,7 @@ def create_orchestrator() -> OptionalOrchestratorWithReport:
             name="Upload Artifacts",
             description="Upload Artifacts with libs and versions",
             base_install_dir=base_install_dir,
+            artifact_prefix = create_artifact_prefix_from_orchestrator_name_version(o)
         ).add_extra(StepSkipExecutionOnLocal())
     )
 
