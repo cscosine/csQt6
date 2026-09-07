@@ -267,21 +267,6 @@ jobs:
         cd "${BUILD_FOLDER}"
 
         cmake --build .
-      if: ${{ matrix.os == 'linux' && startsWith(matrix.os_version, 'ubuntu') }}
-      shell: bash
-    - name: Run command Install (Linux-Ubuntu)
-      run: |-
-        set -euo pipefail
-
-        ROOT_FOLDER=$(pwd)
-
-        FOLDER_NAME="csv1-${{ matrix.os }}-${{ matrix.os_version }}-${{ matrix.architecture }}-${{ matrix.architecture_variant }}-${{ matrix.compiler }}-${{ matrix.compiler_version }}-${{ matrix.generator }}"
-        : "${FOLDER_NAME:?missing FOLDER_NAME}"
-
-        BUILD_FOLDER="${ROOT_FOLDER}/workspace/build/${FOLDER_NAME}/qt6/release"
-
-        cd "${BUILD_FOLDER}"
-
         cmake --install .
       if: ${{ matrix.os == 'linux' && startsWith(matrix.os_version, 'ubuntu') }}
       shell: bash
@@ -368,22 +353,6 @@ jobs:
 
         cmake --build .
         if ($LASTEXITCODE) { exit $LASTEXITCODE }
-      if: ${{ matrix.os == 'windows' }}
-      shell: powershell
-    - name: Run command Install (Windows)
-      run: |-
-        Set-StrictMode -Version Latest
-        $ErrorActionPreference = 'Stop'
-
-        $ROOT_FOLDER = Get-Location
-
-        $BUILD_FOLDER_NAME = "build-${{ matrix.execution_id }}"
-
-        $BUILD_FOLDER="$ROOT_FOLDER/workspace/build/$BUILD_FOLDER_NAME/qt6/release"
-
-
-        Set-Location $BUILD_FOLDER
-
         cmake --install .
         if ($LASTEXITCODE) { exit $LASTEXITCODE }
       if: ${{ matrix.os == 'windows' }}

@@ -2,6 +2,7 @@
 import sys
 from collections.abc import Sequence
 from pathlib import Path
+from textwrap import dedent
 
 from csorchestrator.application.cli.cli import orchestrator_main_with_default_run
 from csorchestrator.application.factory.factory import (
@@ -189,28 +190,30 @@ def create_orchestrator() -> OptionalOrchestratorWithReport:
         .add_extra(StepExecuteOnlyOn(os=OS.LINUX, version_starts_with=UBUNTU_STRING_PREFIX))
     )
 
+    free_disk_script = r"""
+    set -euo pipefail
+
+    # Show available space
+    df -h
+
+    # Remove unnecessary tools/packages (do not fail if they are not installed)
+    sudo apt-get remove -y '^ghc-8.*' '^dotnet-.*' '^mongodb.*' 'mysql-.*' 'php.*' 'powershell' 'snap.*' || true
+    sudo apt-get autoremove -y
+    sudo apt-get clean
+
+    # Remove large directories
+    sudo rm -rf /usr/local/lib/android || true
+    sudo rm -rf /opt/hostedtoolcache || true
+
+    # Show available space
+    df -h
+    """
+
     p.add_step(
         StepBashScriptCommand(
             name="Free disk space (Linux-Ubuntu)",
-            description="init repo",
-            cmd=[
-                "set -euo pipefail",
-                "",
-                "# Show available space",
-                "df -h",
-                "",
-                "# Remove unnecessary tools/packages (do not fail if they are not installed)",
-                "sudo apt-get remove -y '^ghc-8.*' '^dotnet-.*' '^mongodb.*' 'mysql-.*' 'php.*' 'powershell' 'snap.*' || true",  # noqa: E501
-                "sudo apt-get autoremove -y",
-                "sudo apt-get clean",
-                "",
-                "# Remove large directories",
-                "sudo rm -rf /usr/local/lib/android || true",
-                "sudo rm -rf /opt/hostedtoolcache || true",
-                "",
-                "# Show available space",
-                "df -h",
-            ],
+            description="Free disk space by removing unnecessary packages and directories",
+            cmd=dedent(free_disk_script).strip().splitlines(),
             dry_run=False,
         )
         .add_extra(StepExecuteOnlyOn(os=OS.LINUX, version_starts_with=UBUNTU_STRING_PREFIX))
@@ -218,82 +221,70 @@ def create_orchestrator() -> OptionalOrchestratorWithReport:
     )
 
     p = o.create_phase("Configure-Build-Test-Install (Linux-Ubuntu)")
+    init_repo_script_linux = rf"""
+    set -euo pipefail
+
+    cd workspace/{repo_name}
+    ./init-repository
+    """
     p.add_step(
         StepBashScriptCommand(
             name="init repo (Linux-Ubuntu)",
             description="init repo",
-            cmd=["set -euo pipefail", "", f"cd workspace/{repo_name}", "./init-repository"],
+            cmd=dedent(init_repo_script_linux).strip().splitlines(),
             dry_run=False,
         )
         .add_extra(StepExecuteOnlyOncePerMatrix())
         .add_extra(StepExecuteOnlyOn(os=OS.LINUX, version_starts_with=UBUNTU_STRING_PREFIX))
     )
 
+    configure_repo_script = rf"""
+    set -euo pipefail
+
+    ROOT_FOLDER=$(pwd)
+
+    FOLDER_NAME="$CS_DIR_FROM_MATRIX"
+    : "${{FOLDER_NAME:?missing FOLDER_NAME}}"
+
+    REPO_FOLDER="${{ROOT_FOLDER}}/workspace/{repo_name}"
+    BUILD_FOLDER="${{ROOT_FOLDER}}/workspace/build/${{FOLDER_NAME}}/{repo_name}/release"
+    INSTALL_FOLDER="${{ROOT_FOLDER}}/workspace/install/${{FOLDER_NAME}}/{repo_name}"
+
+    mkdir -p "${{INSTALL_FOLDER}}"
+    mkdir -p "${{BUILD_FOLDER}}"
+
+    cd "${{BUILD_FOLDER}}"
+
+    "${{REPO_FOLDER}}/configure" -no-pch -skip qtwebengine -release -prefix "${{INSTALL_FOLDER}}"
+    """
     p.add_step(
         StepBashScriptCommand(
             name="Configure (Linux-Ubuntu)",
             description="configure repo",
-            cmd=[
-                "set -euo pipefail",
-                "",
-                "ROOT_FOLDER=$(pwd)",
-                "",
-                'FOLDER_NAME="$CS_DIR_FROM_MATRIX"',
-                ': "${FOLDER_NAME:?missing FOLDER_NAME}"',
-                "",
-                f'REPO_FOLDER="${{ROOT_FOLDER}}/workspace/{repo_name}"',
-                f'BUILD_FOLDER="${{ROOT_FOLDER}}/workspace/build/${{FOLDER_NAME}}/{repo_name}/release"',
-                f'INSTALL_FOLDER="${{ROOT_FOLDER}}/workspace/install/${{FOLDER_NAME}}/{repo_name}"',
-                "",
-                'mkdir -p "${INSTALL_FOLDER}"',
-                'mkdir -p "${BUILD_FOLDER}"',
-                "",
-                'cd "${BUILD_FOLDER}"',
-                "",
-                '"${REPO_FOLDER}/configure" -no-pch -skip qtwebengine -release -prefix "${INSTALL_FOLDER}"',
-            ],
+            cmd=dedent(configure_repo_script).strip().splitlines(),
         ).add_extra(StepExecuteOnlyOn(os=OS.LINUX, version_starts_with=UBUNTU_STRING_PREFIX))
     )
 
+    build_linux_script = rf"""
+    set -euo pipefail
+
+    ROOT_FOLDER=$(pwd)
+
+    FOLDER_NAME="$CS_DIR_FROM_MATRIX"
+    : "${{FOLDER_NAME:?missing FOLDER_NAME}}"
+
+    BUILD_FOLDER="${{ROOT_FOLDER}}/workspace/build/${{FOLDER_NAME}}/{repo_name}/release"
+
+    cd "${{BUILD_FOLDER}}"
+
+    cmake --build .
+    cmake --install .
+    """
     p.add_step(
         StepBashScriptCommand(
             name="Build (Linux-Ubuntu)",
-            description="build repo",
-            cmd=[
-                "set -euo pipefail",
-                "",
-                "ROOT_FOLDER=$(pwd)",
-                "",
-                'FOLDER_NAME="$CS_DIR_FROM_MATRIX"',
-                ': "${FOLDER_NAME:?missing FOLDER_NAME}"',
-                "",
-                f'BUILD_FOLDER="${{ROOT_FOLDER}}/workspace/build/${{FOLDER_NAME}}/{repo_name}/release"',
-                "",
-                'cd "${BUILD_FOLDER}"',
-                "",
-                "cmake --build .",
-            ],
-        ).add_extra(StepExecuteOnlyOn(os=OS.LINUX, version_starts_with=UBUNTU_STRING_PREFIX))
-    )
-
-    p.add_step(
-        StepBashScriptCommand(
-            name="Install (Linux-Ubuntu)",
-            description="build repo",
-            cmd=[
-                "set -euo pipefail",
-                "",
-                "ROOT_FOLDER=$(pwd)",
-                "",
-                'FOLDER_NAME="$CS_DIR_FROM_MATRIX"',
-                ': "${FOLDER_NAME:?missing FOLDER_NAME}"',
-                "",
-                f'BUILD_FOLDER="${{ROOT_FOLDER}}/workspace/build/${{FOLDER_NAME}}/{repo_name}/release"',
-                "",
-                'cd "${BUILD_FOLDER}"',
-                "",
-                "cmake --install .",
-            ],
+            description="build and install repo",
+            cmd=dedent(build_linux_script).strip().splitlines(),
         ).add_extra(StepExecuteOnlyOn(os=OS.LINUX, version_starts_with=UBUNTU_STRING_PREFIX))
     )
 
@@ -313,31 +304,32 @@ def create_orchestrator() -> OptionalOrchestratorWithReport:
         )
     )
 
+    show_msvc_version_script = r"""
+    Write-Host "=== Visual Studio ==="
+
+    & "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" `
+        -latest `
+        -products * `
+        -property installationName
+
+    & "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" `
+        -latest `
+        -products * `
+        -property catalog_productDisplayVersion
+
+    Write-Host ""
+    Write-Host "=== MSVC ==="
+
+    $cl = Get-Command cl.exe -ErrorAction Stop
+
+    Write-Host "cl.exe:"
+    Write-Host $cl.Source
+    """
     p.add_step(
         StepWinPSCommand(
             name="Show MSVC Version (Windows)",
             description="show msvc verison",
-            cmd=[
-                'Write-Host "=== Visual Studio ==="',
-                "",
-                '& "${env:ProgramFiles(x86)}\\Microsoft Visual Studio\\Installer\\vswhere.exe" `',
-                "    -latest `",
-                "    -products * `",
-                "    -property installationName",
-                "",
-                '& "${env:ProgramFiles(x86)}\\Microsoft Visual Studio\\Installer\\vswhere.exe" `',
-                "    -latest `",
-                "    -products * `",
-                "    -property catalog_productDisplayVersion",
-                "",
-                'Write-Host ""',
-                'Write-Host "=== MSVC ==="',
-                "",
-                "$cl = Get-Command cl.exe -ErrorAction Stop",
-                "",
-                'Write-Host "cl.exe:"',
-                "Write-Host $cl.Source",
-            ],
+            cmd=dedent(show_msvc_version_script).strip().splitlines(),
             dry_run=False,
         )
         .add_extra(StepExecuteOnlyOncePerMatrix())
@@ -348,17 +340,18 @@ def create_orchestrator() -> OptionalOrchestratorWithReport:
         )
     )
 
+    init_repo_script_windows = rf"""
+    Set-StrictMode -Version Latest
+    $ErrorActionPreference = 'Stop'
+
+    cd workspace/{repo_name}
+    ./init-repository.bat
+    """
     p.add_step(
         StepWinPSCommand(
             name="init repo (Windows)",
             description="init repo",
-            cmd=[
-                "Set-StrictMode -Version Latest",
-                "$ErrorActionPreference = 'Stop'",
-                "",
-                "cd workspace/" + repo_name,
-                "./init-repository.bat",
-            ],
+            cmd=dedent(init_repo_script_windows).strip().splitlines(),
             dry_run=False,
         )
         .add_extra(StepExecuteOnlyOncePerMatrix())
@@ -368,39 +361,41 @@ def create_orchestrator() -> OptionalOrchestratorWithReport:
             )
         )
     )
+
+    configure_repo_script_windows = rf"""
+    Set-StrictMode -Version Latest
+    $ErrorActionPreference = 'Stop'
+
+    if (!(Test-Path ".venv")) {{
+        python -m venv .venv
+    }}
+    & ".\.venv\Scripts\Activate.ps1"
+    python -m pip install --upgrade pip
+    pip install html5lib
+
+    $ROOT_FOLDER = Get-Location
+
+    $FOLDER_NAME = "$CS_DIR_FROM_MATRIX"
+    $BUILD_FOLDER_NAME = "build-$CS_MATRIX_EXEC_ID"
+
+    $REPO_FOLDER="$ROOT_FOLDER/workspace/{repo_name}"
+    $BUILD_FOLDER="$ROOT_FOLDER/workspace/build/$BUILD_FOLDER_NAME/{repo_name}/release"
+    $INSTALL_FOLDER="$ROOT_FOLDER/workspace/install/$FOLDER_NAME/{repo_name}"
+
+    New-Item -ItemType Directory -Force -Path "$INSTALL_FOLDER" | Out-Null
+    New-Item -ItemType Directory -Force -Path "$BUILD_FOLDER" | Out-Null
+
+    Set-Location $BUILD_FOLDER
+
+    & "$REPO_FOLDER/configure.bat" -no-pch -skip qtwebengine -release -prefix "$INSTALL_FOLDER"
+    if ($LASTEXITCODE) {{ exit $LASTEXITCODE }}
+    """
 
     p.add_step(
         StepWinPSCommand(
             name="Configure (Windows)",
             description="configure repo",
-            cmd=[
-                "Set-StrictMode -Version Latest",
-                "$ErrorActionPreference = 'Stop'",
-                "",
-                'if (!(Test-Path ".venv")) {',
-                "    python -m venv .venv",
-                "}",
-                '& ".\\.venv\\Scripts\\Activate.ps1"',
-                "python -m pip install --upgrade pip",
-                "pip install html5lib",
-                "",
-                "$ROOT_FOLDER = Get-Location",
-                "",
-                '$FOLDER_NAME = "$CS_DIR_FROM_MATRIX"',
-                '$BUILD_FOLDER_NAME = "build-$CS_MATRIX_EXEC_ID"',
-                "",
-                f'$REPO_FOLDER="$ROOT_FOLDER/workspace/{repo_name}"',
-                f'$BUILD_FOLDER="$ROOT_FOLDER/workspace/build/$BUILD_FOLDER_NAME/{repo_name}/release"',
-                f'$INSTALL_FOLDER="$ROOT_FOLDER/workspace/install/$FOLDER_NAME/{repo_name}"',
-                "",
-                'New-Item -ItemType Directory -Force -Path "$INSTALL_FOLDER" | Out-Null',
-                'New-Item -ItemType Directory -Force -Path "$BUILD_FOLDER" | Out-Null',
-                "",
-                "Set-Location $BUILD_FOLDER",
-                "",
-                '& "$REPO_FOLDER/configure.bat" -no-pch -skip qtwebengine -release -prefix "$INSTALL_FOLDER"',
-                "if ($LASTEXITCODE) { exit $LASTEXITCODE }",
-            ],
+            cmd=dedent(configure_repo_script_windows).strip().splitlines(),
             dry_run=False,
         ).add_extra(
             StepExecuteOnlyOn(
@@ -408,55 +403,31 @@ def create_orchestrator() -> OptionalOrchestratorWithReport:
             )
         )
     )
+
+    build_windows_script = rf"""
+    Set-StrictMode -Version Latest
+    $ErrorActionPreference = 'Stop'
+
+    $ROOT_FOLDER = Get-Location
+
+    $BUILD_FOLDER_NAME = "build-$CS_MATRIX_EXEC_ID"
+
+    $BUILD_FOLDER="$ROOT_FOLDER/workspace/build/$BUILD_FOLDER_NAME/{repo_name}/release"
+
+
+    Set-Location $BUILD_FOLDER
+
+    cmake --build .
+    if ($LASTEXITCODE) {{ exit $LASTEXITCODE }}
+    cmake --install .
+    if ($LASTEXITCODE) {{ exit $LASTEXITCODE }}
+    """
 
     p.add_step(
         StepWinPSCommand(
             name="Build (Windows)",
-            description="build repo",
-            cmd=[
-                "Set-StrictMode -Version Latest",
-                "$ErrorActionPreference = 'Stop'",
-                "",
-                "$ROOT_FOLDER = Get-Location",
-                "",
-                '$BUILD_FOLDER_NAME = "build-$CS_MATRIX_EXEC_ID"',
-                "",
-                f'$BUILD_FOLDER="$ROOT_FOLDER/workspace/build/$BUILD_FOLDER_NAME/{repo_name}/release"',
-                "",
-                "",
-                "Set-Location $BUILD_FOLDER",
-                "",
-                "cmake --build .",
-                "if ($LASTEXITCODE) { exit $LASTEXITCODE }",
-            ],
-            dry_run=False,
-        ).add_extra(
-            StepExecuteOnlyOn(
-                os=OS.WINDOWS,
-            )
-        )
-    )
-
-    p.add_step(
-        StepWinPSCommand(
-            name="Install (Windows)",
-            description="install repo",
-            cmd=[
-                "Set-StrictMode -Version Latest",
-                "$ErrorActionPreference = 'Stop'",
-                "",
-                "$ROOT_FOLDER = Get-Location",
-                "",
-                '$BUILD_FOLDER_NAME = "build-$CS_MATRIX_EXEC_ID"',
-                "",
-                f'$BUILD_FOLDER="$ROOT_FOLDER/workspace/build/$BUILD_FOLDER_NAME/{repo_name}/release"',
-                "",
-                "",
-                "Set-Location $BUILD_FOLDER",
-                "",
-                "cmake --install .",
-                "if ($LASTEXITCODE) { exit $LASTEXITCODE }",
-            ],
+            description="build and install repo",
+            cmd=dedent(build_windows_script).strip().splitlines(),
             dry_run=False,
         ).add_extra(
             StepExecuteOnlyOn(
