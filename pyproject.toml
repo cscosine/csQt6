@@ -1,0 +1,58 @@
+[build-system]
+requires = ["setuptools>=61", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "csQt6"
+version = "6.11.1"
+description = "Qt 6 build system for csOrchestrator"
+authors = [
+  { name = "cscosine-dev", email = "cscosine@gmail.com" }
+]
+readme = "README.md"
+license = { text = "MIT" }
+requires-python = ">=3.11"
+dependencies = [
+    # add csOrchestrator when available on pip
+]
+
+[project.optional-dependencies]
+# development tools (tests, linting, type checking)
+dev = [
+    "mypy>=1.0",
+    "ruff>=0.4",
+    "pre-commit>=4",
+]
+
+# ===============================
+# Ruff - Linter + Formatter
+# ===============================
+[tool.ruff]
+
+# Maximum allowed line length for linting.
+line-length = 120
+
+# Target Python version for rule selection / parsing.
+target-version = "py311"
+
+[tool.ruff.lint]
+# Enabled rule groups:
+# E  -> Pycodestyle errors (style issues)
+# F  -> Pyflakes (logical errors / unused imports)
+# I  -> Import sorting
+# B  -> Bugbear (common bug patterns)
+# UP -> modern Python suggestions
+# SIM -> catches simplifications
+select = [
+    "E",
+    "F",
+    "I",
+    "B",
+    "UP",
+    "SIM"
+]
+
+[tool.ruff.format]
+# Force double quotes in formatted code.
+# This keeps formatting consistent across the project.
+quote-style = "double"

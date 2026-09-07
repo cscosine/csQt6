@@ -24,7 +24,7 @@ cmake  -DCMAKE_BUILD_TYPE=Debug
 cmake --build
 
 while for multi
-cmake ../ 
+cmake ../
 cmake --build . --config Release
 cmake --build . --config Debug
 

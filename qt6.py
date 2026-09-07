@@ -1,36 +1,106 @@
 #!/usr/bin/env python3
 import sys
+from collections.abc import Sequence
 from pathlib import Path
-from typing import Sequence
 
+from csorchestrator.application.cli.cli import orchestrator_main_with_default_run
+from csorchestrator.application.factory.factory import (
+    OptionalOrchestratorWithReport,
+)
+from csorchestrator.application.recipes.create_orchestrator import create_default_orchestrator
+from csorchestrator.domain.context.context_compiler_generator import (
+    Compiler,
+    ContextCompilerGenerator,
+    GeneratorWithType,
+)
+from csorchestrator.domain.context.context_os_architecture import (
+    ARCHITECTURE_VARIANT_GENERIC,
+    OS,
+    UBUNTU_STRING_PREFIX,
+    Architecture,
+    ContextOsArchitecture,
+)
+from csorchestrator.domain.context.context_os_architecture_compiler_generator import (
+    ContextOsArchitectureCompilerGenerator,
+)
 from csorchestrator.foundation.core.report import Report
-from csorchestrator.foundation.core.optional_result_with_report import OptionalResultWithReport
 from csorchestrator.foundation.git.resolve_url import RepoUrlParts
-
-from csorchestrator.domain.orchestrator.workflow_config import WorkflowConfig, Cron, DayOfWeek, ReleaseCreationOnTagConfig
-from csorchestrator.domain.context.context_os_architecture import OS
-from csorchestrator.domain.context.context_compiler_generator import ContextCompilerGenerator, Compiler
-from csorchestrator.domain.context.context_os_architecture import UBUNTU_STRING_PREFIX
-
-from csorchestrator.frontend.step.step_get_repository import StepGetRepositoryGitHub, StepGetRepositoryExtraDepthOne
-from csorchestrator.frontend.step.step_get_versions_from_cmake_config_package_version import StepGetVersionsFromCMakeConfigPackageVersion, CMakeConfigPackageVersion
-from csorchestrator.frontend.step.step_create_archives import StepCreateArchives
-from csorchestrator.frontend.step.step_upload_artifacts import StepUploadArtifacts, create_artifact_prefix_from_orchestrator_name_version
-from csorchestrator.frontend.step.step_custom_command import StepInstallAptPackages, StepBashScriptCommand, StepWinPSCommand
-from csorchestrator.frontend.step.step_github_action import StepAddGitHubAction
-
+from csorchestrator.frontend.cscmake_presets.supported_variants import (
+    get_supported_os_version_list,
+)
 from csorchestrator.frontend.github_workflow_translation.github_workflow_matrix_constants import (
     MatrixOsArchCompilerGeneratorGithubConstants,
 )
-
 from csorchestrator.frontend.local_execution.step_utils import (
+    StepExecuteOnlyOn,
     StepExecuteOnlyOncePerMatrix,
     StepSkipExecutionOnLocal,
-    StepExecuteOnlyOn,
 )
+from csorchestrator.frontend.step.step_create_archives import StepCreateArchives
+from csorchestrator.frontend.step.step_custom_command import (
+    StepBashScriptCommand,
+    StepInstallAptPackages,
+    StepWinPSCommand,
+)
+from csorchestrator.frontend.step.step_get_repository import StepGetRepositoryExtraDepthOne, StepGetRepositoryGitHub
+from csorchestrator.frontend.step.step_get_versions_from_cmake_config_package_version import (
+    StepGetVersionsFromCMakeConfigPackageVersion,
+)
+from csorchestrator.frontend.step.step_github_action import StepAddGitHubAction
+from csorchestrator.frontend.step.step_upload_artifacts import (
+    StepUploadArtifacts,
+    create_artifact_prefix_from_orchestrator_name_version,
+)
+from csorchestrator.portable.package_version import PackageVersion
 
-from csorchestrator.application.factory.factory import OptionalOrchestratorWithReport, create_orchestrator_factory_all_supported_cases
-from csorchestrator.application.cli.cli import orchestrator_main_with_default_run
+
+def populate_build_matrix() -> list[ContextOsArchitectureCompilerGenerator]:
+    retList: list[ContextOsArchitectureCompilerGenerator] = []
+
+    ## LINUX. use multi-config for x64 arch, use single config for arm64 arch
+    for os_version in get_supported_os_version_list(OS.LINUX):
+        for arch in [Architecture.X64, Architecture.ARM64]:
+            os_arch = ContextOsArchitecture(
+                os=OS.LINUX,
+                os_version=os_version,
+                architecture=arch,
+                architecture_variant=ARCHITECTURE_VARIANT_GENERIC,
+            )
+            generator = GeneratorWithType.NINJA
+            compiler = Compiler.GCC
+
+            ccg = ContextCompilerGenerator(
+                compiler_family=compiler,
+                compiler_version=ContextCompilerGenerator.COMPILER_VERSION_DEFAULT,
+                build_generator=generator,
+            )
+            retList.append(
+                ContextOsArchitectureCompilerGenerator(context_os_architecture=os_arch, context_compiler_generator=ccg)
+            )
+
+    ## WINDOWS, need to use ninja generator on msvc 2022
+    for os_version in get_supported_os_version_list(OS.WINDOWS):
+        os_arch = ContextOsArchitecture(
+            os=OS.WINDOWS,
+            os_version=os_version,
+            architecture=Architecture.X64,
+            architecture_variant=ARCHITECTURE_VARIANT_GENERIC,
+        )
+
+        generator = GeneratorWithType.NINJA
+        compiler = Compiler.MSVC
+        version = ContextCompilerGenerator.COMPILER_VERSION_MSVC_2022_17
+
+        ccg = ContextCompilerGenerator(
+            compiler_family=compiler,
+            compiler_version=version,
+            build_generator=generator,
+        )
+        retList.append(
+            ContextOsArchitectureCompilerGenerator(context_os_architecture=os_arch, context_compiler_generator=ccg)
+        )
+
+    return retList
 
 
 def create_orchestrator() -> OptionalOrchestratorWithReport:
@@ -42,36 +112,11 @@ def create_orchestrator() -> OptionalOrchestratorWithReport:
     # please keep version aligned with qt version
     qt_version_tag = "v6.11.1"
 
-    o = create_orchestrator_factory_all_supported_cases(
-        "Qt6",
-        version=qt_version_tag,
-        execution_matrix_name="orchestrator-matrix",
-        use_ninja_for_windows=True,
-        use_ninja=True,
-        use_ninjamulti=False,
+    o = create_default_orchestrator(
+        name="Qt6", version=qt_version_tag, base_install_dir=base_install_dir, populate_default_matrix=False
     )
 
-    # strip non used matrix configs
-    new_list = []
-    for entry in o.execution_matrix.os_architecture_compiler_generator_list:
-        if entry.context_os_architecture.os == OS.LINUX and entry.context_compiler_generator.compiler_family == Compiler.GCC:
-            new_list += [entry]
-        if entry.context_os_architecture.os == OS.WINDOWS \
-            and entry.context_compiler_generator.compiler_family == Compiler.MSVC \
-            and entry.context_compiler_generator.compiler_version == ContextCompilerGenerator.COMPILER_VERSION_MSVC_2022_17:
-            new_list += [entry]
-    
-
-    o.execution_matrix.os_architecture_compiler_generator_list = new_list
-
-    o.wf_config=WorkflowConfig(
-            on_push_branches=["main", "dev"],
-            on_push_tags=["'v*.*.*'"],
-            on_pull_request_branches=["main"],
-            on_dispatch=True,
-            on_schedule=Cron.weekly(DayOfWeek.MON, hour=3),
-            create_release_on_tag=ReleaseCreationOnTagConfig(name="release-from-artifacts")
-        )
+    o.execution_matrix.os_architecture_compiler_generator_list = populate_build_matrix()
 
     repo_name = "qt6"
 
@@ -141,9 +186,7 @@ def create_orchestrator() -> OptionalOrchestratorWithReport:
             dry_run=False,
         )
         .add_extra(StepExecuteOnlyOncePerMatrix())
-        .add_extra(
-            StepExecuteOnlyOn(os=OS.LINUX, version_starts_with=UBUNTU_STRING_PREFIX)
-        )
+        .add_extra(StepExecuteOnlyOn(os=OS.LINUX, version_starts_with=UBUNTU_STRING_PREFIX))
     )
 
     p.add_step(
@@ -152,47 +195,38 @@ def create_orchestrator() -> OptionalOrchestratorWithReport:
             description="init repo",
             cmd=[
                 "set -euo pipefail",
-                '',
+                "",
                 "# Show available space",
                 "df -h",
-                '',
+                "",
                 "# Remove unnecessary tools/packages (do not fail if they are not installed)",
-                "sudo apt-get remove -y '^ghc-8.*' '^dotnet-.*' '^mongodb.*' 'mysql-.*' 'php.*' 'powershell' 'snap.*' || true",
+                "sudo apt-get remove -y '^ghc-8.*' '^dotnet-.*' '^mongodb.*' 'mysql-.*' 'php.*' 'powershell' 'snap.*' || true",  # noqa: E501
                 "sudo apt-get autoremove -y",
                 "sudo apt-get clean",
-                '',
+                "",
                 "# Remove large directories",
                 "sudo rm -rf /usr/local/lib/android || true",
                 "sudo rm -rf /opt/hostedtoolcache || true",
-                '',
+                "",
                 "# Show available space",
                 "df -h",
             ],
             dry_run=False,
         )
-        .add_extra(
-            StepExecuteOnlyOn(os=OS.LINUX, version_starts_with=UBUNTU_STRING_PREFIX)
-        )
+        .add_extra(StepExecuteOnlyOn(os=OS.LINUX, version_starts_with=UBUNTU_STRING_PREFIX))
         .add_extra(StepSkipExecutionOnLocal())
     )
 
-    p = o.create_phase(f"Configure-Build-Test-Install (Linux-Ubuntu)")
+    p = o.create_phase("Configure-Build-Test-Install (Linux-Ubuntu)")
     p.add_step(
         StepBashScriptCommand(
             name="init repo (Linux-Ubuntu)",
             description="init repo",
-            cmd=[
-                'set -euo pipefail',
-                '',
-                f'cd workspace/{repo_name}', 
-                './init-repository'
-                ],
+            cmd=["set -euo pipefail", "", f"cd workspace/{repo_name}", "./init-repository"],
             dry_run=False,
         )
         .add_extra(StepExecuteOnlyOncePerMatrix())
-        .add_extra(
-            StepExecuteOnlyOn(os=OS.LINUX, version_starts_with=UBUNTU_STRING_PREFIX)
-        )
+        .add_extra(StepExecuteOnlyOn(os=OS.LINUX, version_starts_with=UBUNTU_STRING_PREFIX))
     )
 
     p.add_step(
@@ -200,27 +234,25 @@ def create_orchestrator() -> OptionalOrchestratorWithReport:
             name="Configure (Linux-Ubuntu)",
             description="configure repo",
             cmd=[
-                'set -euo pipefail',
-                '',
-                'ROOT_FOLDER=$(pwd)',
-                '',
+                "set -euo pipefail",
+                "",
+                "ROOT_FOLDER=$(pwd)",
+                "",
                 'FOLDER_NAME="$CS_DIR_FROM_MATRIX"',
                 ': "${FOLDER_NAME:?missing FOLDER_NAME}"',
-                '',
+                "",
                 f'REPO_FOLDER="${{ROOT_FOLDER}}/workspace/{repo_name}"',
                 f'BUILD_FOLDER="${{ROOT_FOLDER}}/workspace/build/${{FOLDER_NAME}}/{repo_name}/release"',
                 f'INSTALL_FOLDER="${{ROOT_FOLDER}}/workspace/install/${{FOLDER_NAME}}/{repo_name}"',
-                '',
+                "",
                 'mkdir -p "${INSTALL_FOLDER}"',
                 'mkdir -p "${BUILD_FOLDER}"',
-                '',
+                "",
                 'cd "${BUILD_FOLDER}"',
-                '',
+                "",
                 '"${REPO_FOLDER}/configure" -no-pch -skip qtwebengine -release -prefix "${INSTALL_FOLDER}"',
-            ]
-        ).add_extra(
-            StepExecuteOnlyOn(os=OS.LINUX, version_starts_with=UBUNTU_STRING_PREFIX)
-        )
+            ],
+        ).add_extra(StepExecuteOnlyOn(os=OS.LINUX, version_starts_with=UBUNTU_STRING_PREFIX))
     )
 
     p.add_step(
@@ -228,22 +260,20 @@ def create_orchestrator() -> OptionalOrchestratorWithReport:
             name="Build (Linux-Ubuntu)",
             description="build repo",
             cmd=[
-                'set -euo pipefail',
-                '',
-                'ROOT_FOLDER=$(pwd)',
-                '',
+                "set -euo pipefail",
+                "",
+                "ROOT_FOLDER=$(pwd)",
+                "",
                 'FOLDER_NAME="$CS_DIR_FROM_MATRIX"',
                 ': "${FOLDER_NAME:?missing FOLDER_NAME}"',
-                '',
+                "",
                 f'BUILD_FOLDER="${{ROOT_FOLDER}}/workspace/build/${{FOLDER_NAME}}/{repo_name}/release"',
-                '',
+                "",
                 'cd "${BUILD_FOLDER}"',
-                '',
-                'cmake --build .',
-            ]
-        ).add_extra(
-            StepExecuteOnlyOn(os=OS.LINUX, version_starts_with=UBUNTU_STRING_PREFIX)
-        )
+                "",
+                "cmake --build .",
+            ],
+        ).add_extra(StepExecuteOnlyOn(os=OS.LINUX, version_starts_with=UBUNTU_STRING_PREFIX))
     )
 
     p.add_step(
@@ -251,35 +281,31 @@ def create_orchestrator() -> OptionalOrchestratorWithReport:
             name="Install (Linux-Ubuntu)",
             description="build repo",
             cmd=[
-                'set -euo pipefail',
-                '',
-                'ROOT_FOLDER=$(pwd)',
-                '',
+                "set -euo pipefail",
+                "",
+                "ROOT_FOLDER=$(pwd)",
+                "",
                 'FOLDER_NAME="$CS_DIR_FROM_MATRIX"',
                 ': "${FOLDER_NAME:?missing FOLDER_NAME}"',
-                '',
+                "",
                 f'BUILD_FOLDER="${{ROOT_FOLDER}}/workspace/build/${{FOLDER_NAME}}/{repo_name}/release"',
-                '',
+                "",
                 'cd "${BUILD_FOLDER}"',
-                '',
-                'cmake --install .',
-            ]
-        ).add_extra(
-            StepExecuteOnlyOn(os=OS.LINUX, version_starts_with=UBUNTU_STRING_PREFIX)
-        )
+                "",
+                "cmake --install .",
+            ],
+        ).add_extra(StepExecuteOnlyOn(os=OS.LINUX, version_starts_with=UBUNTU_STRING_PREFIX))
     )
 
     # ----------------- WINDOWS -----------------
-    p = o.create_phase(f"Configure-Build-Test-Install (Windows)")
+    p = o.create_phase("Configure-Build-Test-Install (Windows)")
 
     p.add_step(
         StepAddGitHubAction(
             name="Setup MSVC",
             description="setup MSVC environment",
             uses="TheMrMilchmann/setup-msvc-dev@v4",
-            with_list=[
-                f"arch: {MatrixOsArchCompilerGeneratorGithubConstants.MATRIX_ARCHITECTURE_EMBRACED}"
-            ]
+            with_list={"arch": f"{MatrixOsArchCompilerGeneratorGithubConstants.MATRIX_ARCHITECTURE_EMBRACED}"},
         ).add_extra(
             StepExecuteOnlyOn(
                 os=OS.WINDOWS,
@@ -293,25 +319,25 @@ def create_orchestrator() -> OptionalOrchestratorWithReport:
             description="show msvc verison",
             cmd=[
                 'Write-Host "=== Visual Studio ==="',
-                '',
+                "",
                 '& "${env:ProgramFiles(x86)}\\Microsoft Visual Studio\\Installer\\vswhere.exe" `',
                 "    -latest `",
                 "    -products * `",
                 "    -property installationName",
-                '',
+                "",
                 '& "${env:ProgramFiles(x86)}\\Microsoft Visual Studio\\Installer\\vswhere.exe" `',
                 "    -latest `",
                 "    -products * `",
                 "    -property catalog_productDisplayVersion",
-                '',
+                "",
                 'Write-Host ""',
                 'Write-Host "=== MSVC ==="',
-                '',
+                "",
                 "$cl = Get-Command cl.exe -ErrorAction Stop",
-                '',
+                "",
                 'Write-Host "cl.exe:"',
                 "Write-Host $cl.Source",
-             ],
+            ],
             dry_run=False,
         )
         .add_extra(StepExecuteOnlyOncePerMatrix())
@@ -329,9 +355,10 @@ def create_orchestrator() -> OptionalOrchestratorWithReport:
             cmd=[
                 "Set-StrictMode -Version Latest",
                 "$ErrorActionPreference = 'Stop'",
-                '',
-                "cd workspace/" + repo_name, 
-                './init-repository.bat'],
+                "",
+                "cd workspace/" + repo_name,
+                "./init-repository.bat",
+            ],
             dry_run=False,
         )
         .add_extra(StepExecuteOnlyOncePerMatrix())
@@ -349,28 +376,28 @@ def create_orchestrator() -> OptionalOrchestratorWithReport:
             cmd=[
                 "Set-StrictMode -Version Latest",
                 "$ErrorActionPreference = 'Stop'",
-                '',
+                "",
                 'if (!(Test-Path ".venv")) {',
                 "    python -m venv .venv",
                 "}",
                 '& ".\\.venv\\Scripts\\Activate.ps1"',
                 "python -m pip install --upgrade pip",
                 "pip install html5lib",
-                '',
+                "",
                 "$ROOT_FOLDER = Get-Location",
-                '',
+                "",
                 '$FOLDER_NAME = "$CS_DIR_FROM_MATRIX"',
-                '$BUILD_FOLDER_NAME = "build-$CS_MATRIX_EXEC_ID"',                
-                '',
+                '$BUILD_FOLDER_NAME = "build-$CS_MATRIX_EXEC_ID"',
+                "",
                 f'$REPO_FOLDER="$ROOT_FOLDER/workspace/{repo_name}"',
                 f'$BUILD_FOLDER="$ROOT_FOLDER/workspace/build/$BUILD_FOLDER_NAME/{repo_name}/release"',
                 f'$INSTALL_FOLDER="$ROOT_FOLDER/workspace/install/$FOLDER_NAME/{repo_name}"',
-                '',
+                "",
                 'New-Item -ItemType Directory -Force -Path "$INSTALL_FOLDER" | Out-Null',
                 'New-Item -ItemType Directory -Force -Path "$BUILD_FOLDER" | Out-Null',
-                '',
+                "",
                 "Set-Location $BUILD_FOLDER",
-                '',
+                "",
                 '& "$REPO_FOLDER/configure.bat" -no-pch -skip qtwebengine -release -prefix "$INSTALL_FOLDER"',
                 "if ($LASTEXITCODE) { exit $LASTEXITCODE }",
             ],
@@ -389,16 +416,16 @@ def create_orchestrator() -> OptionalOrchestratorWithReport:
             cmd=[
                 "Set-StrictMode -Version Latest",
                 "$ErrorActionPreference = 'Stop'",
-                '',
+                "",
                 "$ROOT_FOLDER = Get-Location",
-                '',
-                '$BUILD_FOLDER_NAME = "build-$CS_MATRIX_EXEC_ID"',                
-                '',
+                "",
+                '$BUILD_FOLDER_NAME = "build-$CS_MATRIX_EXEC_ID"',
+                "",
                 f'$BUILD_FOLDER="$ROOT_FOLDER/workspace/build/$BUILD_FOLDER_NAME/{repo_name}/release"',
-                '',
-                '',
+                "",
+                "",
                 "Set-Location $BUILD_FOLDER",
-                '',
+                "",
                 "cmake --build .",
                 "if ($LASTEXITCODE) { exit $LASTEXITCODE }",
             ],
@@ -413,21 +440,21 @@ def create_orchestrator() -> OptionalOrchestratorWithReport:
     p.add_step(
         StepWinPSCommand(
             name="Install (Windows)",
-            description="build repo",
+            description="install repo",
             cmd=[
                 "Set-StrictMode -Version Latest",
                 "$ErrorActionPreference = 'Stop'",
-                '',
+                "",
                 "$ROOT_FOLDER = Get-Location",
-                '',
-                '$BUILD_FOLDER_NAME = "build-$CS_MATRIX_EXEC_ID"',                
-                '',
+                "",
+                '$BUILD_FOLDER_NAME = "build-$CS_MATRIX_EXEC_ID"',
+                "",
                 f'$BUILD_FOLDER="$ROOT_FOLDER/workspace/build/$BUILD_FOLDER_NAME/{repo_name}/release"',
-                '',
-                '',
+                "",
+                "",
                 "Set-Location $BUILD_FOLDER",
-                '',
-                "cmake --install . ",
+                "",
+                "cmake --install .",
                 "if ($LASTEXITCODE) { exit $LASTEXITCODE }",
             ],
             dry_run=False,
@@ -437,16 +464,15 @@ def create_orchestrator() -> OptionalOrchestratorWithReport:
             )
         )
     )
-    p = o.create_phase(f"Create and Upload Artifacts")
+
+    p = o.create_phase("Create and Upload Artifacts")
 
     p.add_step(
         StepGetVersionsFromCMakeConfigPackageVersion(
             name="Get Versions",
             description="Get Versions for all libs",
-            repos_version=[CMakeConfigPackageVersion(repo_name, qt_version_tag)],
+            repos_version=[PackageVersion(repo_name, qt_version_tag)],
             base_install_dir=base_install_dir,
-            id="versions",
-            output_dict_name="packages",
         )
     )
 
@@ -454,8 +480,6 @@ def create_orchestrator() -> OptionalOrchestratorWithReport:
         StepCreateArchives(
             name="Create Archives",
             description="Create archives with libs and versions",
-            input_id="versions",
-            input_dict="packages",
             base_install_dir=base_install_dir,
         ).add_extra(StepSkipExecutionOnLocal())
     )
@@ -465,11 +489,11 @@ def create_orchestrator() -> OptionalOrchestratorWithReport:
             name="Upload Artifacts",
             description="Upload Artifacts with libs and versions",
             base_install_dir=base_install_dir,
-            artifact_prefix = create_artifact_prefix_from_orchestrator_name_version(o)
+            artifact_prefix=create_artifact_prefix_from_orchestrator_name_version(o),
         ).add_extra(StepSkipExecutionOnLocal())
     )
 
-    return OptionalResultWithReport.createResultAndReport(o, report)
+    return OptionalOrchestratorWithReport.createResultAndReport(o, report)
 
 
 def main(argv: Sequence[str] | None = None) -> int:
