@@ -156,6 +156,8 @@ jobs:
           generator_cmake: Ninja
           runner: windows-2022
     steps:
+    - name: Repo git self-checkout
+      uses: actions/checkout@v6
     - name: qt6
       uses: actions/checkout@v6
       with:

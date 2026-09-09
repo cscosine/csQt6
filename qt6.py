@@ -6,7 +6,7 @@ from textwrap import dedent
 
 from csorchestrator.application.cli.cli import orchestrator_main_with_default_run
 from csorchestrator.application.factory.factory import OptionalOrchestratorWithReport
-from csorchestrator.application.recipes.checkout_build import create_and_upload_artifacts
+from csorchestrator.application.recipes.checkout_build import checkout_repos, create_and_upload_artifacts
 from csorchestrator.application.recipes.create_orchestrator import (
     create_default_execution_matrix,
     create_default_orchestrator,
@@ -65,6 +65,12 @@ def create_orchestrator() -> OptionalOrchestratorWithReport:
     o.execution_matrix = create_default_execution_matrix(populate_build_matrix())
 
     repo_name = "qt6"
+
+    checkout_repos(
+        orchestrator=o,
+        base_target_dir=base_target_dir,
+        checkout_phase_name="Repos Self checkout Update",
+    )
 
     p = o.create_phase("Repo Update")
     p.add_step(
