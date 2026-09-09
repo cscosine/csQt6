@@ -1,4 +1,5 @@
 import json
+import shutil
 import tarfile
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -34,6 +35,8 @@ class ManifestVersionsEntry:
 class ReleaseManifest:
     project_name: str
     project_version: str
+    additional_files: list[str]
+    output_bundle_file_name: str | None
     variants: list[ManifestVersionsEntry] = field(default_factory=list)
 
     MANIFEST_VERSION: ClassVar[str] = "1.0"
@@ -49,6 +52,8 @@ class ReleaseManifest:
                 "project_name": self.project_name,
                 "project_version": self.project_version,
                 "variants": [variant.to_dict() for variant in self.variants],
+                "additional_files": list(self.additional_files),
+                "output_bundle_file_name": self.output_bundle_file_name,
             }
         }
 
@@ -60,6 +65,8 @@ class ReleaseManifest:
             project_name=in_data["project_name"],
             project_version=in_data["project_version"],
             variants=[ManifestVersionsEntry.from_dict(variant) for variant in in_data["variants"]],
+            additional_files=in_data["additional_files"],
+            output_bundle_file_name=in_data["output_bundle_file_name"],
         )
 
     def write_release_manifest(
@@ -112,6 +119,8 @@ def get_package_versions_and_write_single_variant_manifest(
         project_name=project_name,
         project_version=project_version,
         variants=[entry],
+        additional_files=[],
+        output_bundle_file_name=None,
     )
 
     manifest.write_release_manifest(output_file)
@@ -187,11 +196,47 @@ def load_release_manifest_single_variant_and_prepare_archive(
     return []
 
 
+# TODO: manage errors
+def copy_additional_files(
+    base_path_additional_files: Path,
+    list_additional_files: list[Path],
+    output_folder_additional_files: Path,
+) -> None:
+    for file_path in list_additional_files:
+        # Make the path absolute relative to the base path
+        file_path = base_path_additional_files / file_path
+
+        # Get the path relative to the base directory
+        relative_path = file_path.relative_to(base_path_additional_files)
+
+        # Preserve the subfolder structure in the output directory
+        destination = output_folder_additional_files / relative_path
+
+        # Create parent directories if needed
+        destination.parent.mkdir(parents=True, exist_ok=True)
+
+        # Copy the file
+        shutil.copy2(file_path, destination)
+
+
+def create_archive_additional_files(source_folder: Path, source_list: list[Path], output_archive: Path) -> None:
+    # TODO manage errors
+    with tarfile.open(output_archive, "w:gz") as tar:
+        for path in source_list:
+            resolved_path = (source_folder / path).resolve()
+            arcname = (source_folder / path).resolve().relative_to(source_folder.resolve())
+            tar.add(resolved_path, arcname=arcname)
+
+
 def collect_release_manifest_single_variant_and_prepare_manifest(
     input_manifest_path_variant: list[tuple[Path, str]],
     output_filepath: Path,
     project_name: str,
     project_version: str,
+    base_path_additional_files: Path,
+    list_additional_files: list[Path],
+    output_folder_additional_files: Path,
+    output_bundle_file_name: Path,
 ) -> list[str]:  # return errors
     collected_version_entries: list[ManifestVersionsEntry] = []
     for input_full_path, context_os_architecture_compiler_generator_string in input_manifest_path_variant:
@@ -211,9 +256,24 @@ def collect_release_manifest_single_variant_and_prepare_manifest(
         project_name=project_name,
         project_version=project_version,
         variants=collected_version_entries,
+        additional_files=[file.as_posix() for file in list_additional_files],
+        output_bundle_file_name=output_bundle_file_name.as_posix(),
     )
     release_manifest.write_release_manifest(
         output_filepath,
     )
+
+    if len(list_additional_files) > 0:
+        copy_additional_files(
+            base_path_additional_files=base_path_additional_files,
+            list_additional_files=list_additional_files,
+            output_folder_additional_files=output_folder_additional_files,
+        )
+
+        create_archive_additional_files(
+            source_folder=output_folder_additional_files,
+            source_list=list_additional_files,
+            output_archive=output_folder_additional_files / output_bundle_file_name,
+        )
 
     return []

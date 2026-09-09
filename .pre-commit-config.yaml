@@ -30,6 +30,27 @@ repos:
         args: [--fix]
       - id: ruff-format
 
+#  activate when csOrchestrator is available as a package and can be added as additional-dependencies, for now, use as local command
+#  - repo: https://github.com/pre-commit/mirrors-mypy
+#    rev: v1.20.2
+#    hooks:
+#      - id: mypy
+#        args:
+#          [
+#            "--config-file=pyproject.toml",
+#          ]
+#        additional_dependencies:
+#          - types-PyYAML
+  - repo: local
+    hooks:
+      - id: mypy
+        name: mypy
+        entry: python -m mypy .
+        language: system
+        pass_filenames: false
+        args:
+          - --config-file=pyproject.toml
+
   - repo: https://github.com/rhysd/actionlint
     rev: v1.7.12
     hooks:

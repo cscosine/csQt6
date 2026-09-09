@@ -29,6 +29,7 @@ jobs:
       run: find artifacts -type f
     - name: Manifest creation
       run: |-
+        import os  # noqa: F401 keep even if locally unused, necessary with variable subst
         import sys
         from pathlib import Path
         from typing import cast
@@ -41,12 +42,20 @@ jobs:
         output_filepath = Path('Qt6-v6.11.1.csOrchestratorManifest')
         project_name = 'Qt6'
         project_version = "__PROJECT_VERSION__"
+        base_path_additional_files = Path(os.environ["GITHUB_WORKSPACE"])
+        list_additional_files = []
+        output_folder_additional_files = Path('.')
+        output_bundle_file_name = Path('Qt6-v6.11.1-bundle.tar.gz')
 
         errors_list = collect_release_manifest_single_variant_and_prepare_manifest(
             input_manifest_path_variant=input_manifest_path_variant,
             output_filepath=output_filepath,
             project_name=project_name,
             project_version=project_version,
+            base_path_additional_files=base_path_additional_files,
+            list_additional_files=list_additional_files,
+            output_folder_additional_files=output_folder_additional_files,
+            output_bundle_file_name=output_bundle_file_name,
         )
 
         if len(errors_list) > 0:
@@ -57,7 +66,7 @@ jobs:
       env:
         PYTHONPATH: ${{ github.workspace }}
       working-directory: artifacts
-    - name: Upload artifacts
+    - name: Upload manifest as artifacts
       uses: actions/upload-artifact@v7
       with:
         name: manifest.csOrchestratorManifest
