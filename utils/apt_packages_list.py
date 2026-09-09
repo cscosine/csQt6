@@ -34,5 +34,5 @@ python3-html5lib
 """
 
 
-def get_atp_packages_list() -> list[str]:
+def get_apt_packages_list() -> list[str]:
     return PACKAGES.split()

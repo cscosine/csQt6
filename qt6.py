@@ -31,7 +31,7 @@ from csorchestrator.frontend.step.step_get_repository import StepGetRepositoryEx
 from csorchestrator.frontend.step.step_github_action import StepAddGitHubAction
 from csorchestrator.portable.package_version import PackageVersion
 
-from utils.atp_packages_list import get_atp_packages_list
+from utils.apt_packages_list import get_apt_packages_list
 from utils.build_matrix import populate_build_matrix
 from utils.scripts import (
     build_linux_script,
@@ -95,7 +95,7 @@ def create_orchestrator() -> OptionalOrchestratorWithReport:
         StepInstallAptPackages(
             name="install apt packages",
             description="install apt packages if not already installed in the system",
-            packages=get_atp_packages_list(),
+            packages=get_apt_packages_list(),
             dry_run=False,
         )
         .add_extra(StepExecuteOnlyOncePerMatrix())
@@ -160,7 +160,7 @@ def create_orchestrator() -> OptionalOrchestratorWithReport:
     p.add_step(
         StepWinPSCommand(
             name="Show MSVC Version (Windows)",
-            description="show msvc verison",
+            description="show msvc version",
             cmd=dedent(show_msvc_version_script).strip().splitlines(),
             dry_run=False,
         )
