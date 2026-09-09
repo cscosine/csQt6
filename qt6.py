@@ -5,20 +5,13 @@ from pathlib import Path
 from textwrap import dedent
 
 from csorchestrator.application.cli.cli import orchestrator_main_with_default_run
-from csorchestrator.application.factory.factory import (
-    OptionalOrchestratorWithReport,
-)
-from csorchestrator.application.recipes.checkout_build import (
-    create_and_upload_artifacts,
-)
+from csorchestrator.application.factory.factory import OptionalOrchestratorWithReport
+from csorchestrator.application.recipes.checkout_build import create_and_upload_artifacts
 from csorchestrator.application.recipes.create_orchestrator import (
     create_default_execution_matrix,
     create_default_orchestrator,
 )
-from csorchestrator.domain.context.context_os_architecture import (
-    OS,
-    UBUNTU_STRING_PREFIX,
-)
+from csorchestrator.domain.context.context_os_architecture import OS, UBUNTU_STRING_PREFIX
 from csorchestrator.foundation.core.report import Report
 from csorchestrator.foundation.git.resolve_url import RepoUrlParts
 from csorchestrator.frontend.github_workflow_translation.github_workflow_matrix_constants import (
@@ -62,7 +55,11 @@ def create_orchestrator() -> OptionalOrchestratorWithReport:
     qt_version_tag = "v6.11.1"
 
     o = create_default_orchestrator(
-        name="Qt6", version=qt_version_tag, base_install_dir=base_install_dir, populate_default_matrix=False
+        name="Qt6",
+        version=qt_version_tag,
+        base_install_dir=base_install_dir,
+        populate_default_matrix=False,
+        additional_files_list=[Path("csQt6/cs_orchestrator_config.py")],
     )
 
     o.execution_matrix = create_default_execution_matrix(populate_build_matrix())

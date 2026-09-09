@@ -43,7 +43,7 @@ jobs:
         project_name = 'Qt6'
         project_version = "__PROJECT_VERSION__"
         base_path_additional_files = Path(os.environ["GITHUB_WORKSPACE"])
-        list_additional_files = []
+        list_additional_files = [Path('csQt6/cs_orchestrator_config.py')]
         output_folder_additional_files = Path('.')
         output_bundle_file_name = Path('Qt6-v6.11.1-bundle.tar.gz')
 
@@ -72,12 +72,19 @@ jobs:
         name: manifest.csOrchestratorManifest
         path: |-
           artifacts/**/*.csOrchestratorManifest
+    - name: Upload additional file Qt6-v6.11.1-bundle.tar.gz as artifact
+      uses: actions/upload-artifact@v7
+      with:
+        name: Qt6-v6.11.1-bundle.tar.gz
+        path: |-
+          artifacts/Qt6-v6.11.1-bundle.tar.gz
     - name: Create GitHub Release
       uses: softprops/action-gh-release@v3
       with:
         files: |-
           artifacts/**/*.tar.gz
           artifacts/**/*.csOrchestratorManifest
+          artifacts/Qt6-v6.11.1-bundle.tar.gz
       if: ${{ github.ref_type == 'tag' }}
   orchestrator-matrix:
     runs-on: ${{ matrix.runner }}
