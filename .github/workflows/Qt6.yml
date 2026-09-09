@@ -34,7 +34,7 @@ jobs:
         from pathlib import Path
         from typing import cast
 
-        from csorchestrator.sdk.portable.release_manifest import (
+        from csorchestratorsdk.portable.release_manifest import (
             collect_release_manifest_single_variant_and_prepare_manifest,
         )
 
@@ -379,8 +379,8 @@ jobs:
         from pathlib import Path
         from typing import cast
 
-        from csorchestrator.sdk.portable.package_version import CMakeConfigPackageVersionGrep, PackageVersion
-        from csorchestrator.sdk.portable.release_manifest import get_package_versions_and_write_single_variant_manifest
+        from csorchestratorsdk.portable.package_version import CMakeConfigPackageVersionGrep, PackageVersion
+        from csorchestratorsdk.portable.release_manifest import get_package_versions_and_write_single_variant_manifest
 
         repos_config_file_list = []
         repos_auto_search_list = []
@@ -417,7 +417,7 @@ jobs:
         from pathlib import Path
         from typing import cast
 
-        from csorchestrator.sdk.portable.release_manifest import (
+        from csorchestratorsdk.portable.release_manifest import (
             load_release_manifest_single_variant_and_prepare_archive,
         )
 
