@@ -90,7 +90,6 @@ The core build recipe is defined in [`qt6.py`](qt6.py) and executed across the m
    - Performs a shallow clone (`depth=1`) of `qt/qt5.git` at tag `v6.11.1` into `workspace/qt6`.
 2. **Install Requirements (Linux-Ubuntu)**:
    - Cleans disk space on CI runners to ensure sufficient storage for large Qt builds.
-   - Installs system packages required for Qt 6 GUI, Wayland, X11/XCB, and font rendering (see [`utils/atp_packages_list.py`](utils/atp_packages_list.py)).
    - Installs system packages required for Qt 6 GUI, Wayland, X11/XCB, and font rendering (see [`utils/apt_packages_list.py`](utils/apt_packages_list.py)).
 3. **Configure & Build (Linux-Ubuntu)**:
    - Runs `./init-repository` inside the cloned Qt directory.
